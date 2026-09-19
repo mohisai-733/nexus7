@@ -1,0 +1,2131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>NEXUS-7 — Sentient Resource Orchestration Engine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=JetBrains+Mono:wght@300;400;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+<style>
+:root{
+  --bg:#020408;--bg2:rgba(5,12,25,0.85);--bg3:rgba(0,255,224,0.04);
+  --neon:#00ffe0;--neon2:#7b2fff;--red:#ff003c;--gold:#ffd60a;--green:#00ff88;
+  --text:#c8d8f0;--text2:#6a8aaa;--text3:#2a4060;
+  --border:rgba(0,255,224,0.12);--border2:rgba(0,255,224,0.25);
+  --font-display:'Orbitron',sans-serif;
+  --font-mono:'JetBrains Mono',monospace;
+  --glow:0 0 18px rgba(0,255,224,0.25);
+  --glow-red:0 0 18px rgba(255,0,60,0.4);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;overflow:auto;}
+body{
+  font-family:var(--font-mono);
+  background:var(--bg);
+  color:var(--text);
+  display:flex;flex-direction:column;
+}
+
+/* ── circuit grid bg ── */
+body::before{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:
+    linear-gradient(rgba(0,255,224,0.025) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,255,224,0.025) 1px,transparent 1px);
+  background-size:40px 40px;
+}
+
+/* ── scanlines ── */
+body::after{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:999;
+  background:repeating-linear-gradient(
+    0deg,transparent,transparent 3px,
+    rgba(0,0,0,0.04) 3px,rgba(0,0,0,0.04) 4px);
+}
+
+/* ── HEADER ── */
+.nexus-header{
+  flex-shrink:0;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 20px;
+  background:rgba(0,10,20,0.95);
+  border-bottom:1px solid var(--border2);
+  z-index:100;gap:12px;
+  box-shadow:0 2px 30px rgba(0,255,224,0.08);
+}
+.brand{display:flex;align-items:center;gap:12px;}
+.brand-orb{
+  width:36px;height:36px;border-radius:50%;
+  background:radial-gradient(circle at 35% 35%,#00ffe0,#0030ff);
+  box-shadow:0 0 20px rgba(0,255,224,0.6);
+  animation:pulse-orb 2s ease-in-out infinite;flex-shrink:0;
+}
+@keyframes pulse-orb{0%,100%{box-shadow:0 0 20px rgba(0,255,224,0.6)}50%{box-shadow:0 0 40px rgba(0,255,224,0.9),0 0 60px rgba(0,150,255,0.3)}}
+.brand-name{font-family:var(--font-display);font-size:18px;font-weight:900;letter-spacing:0.1em;color:var(--neon);text-shadow:0 0 20px rgba(0,255,224,0.5);}
+.brand-sub{font-size:9px;color:var(--text2);letter-spacing:0.18em;margin-top:2px;}
+
+.header-pills{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.pill{
+  padding:4px 12px;border-radius:20px;
+  border:1px solid var(--border);background:rgba(0,255,224,0.05);
+  font-size:10px;font-family:var(--font-mono);color:var(--text2);
+  display:flex;align-items:center;gap:6px;
+}
+.pill.alert-ok{border-color:rgba(0,255,136,0.45);background:rgba(0,255,136,0.12);color:#d7ffe8;}
+.pill.alert-warn{border-color:rgba(255,214,10,0.55);background:rgba(255,214,10,0.14);color:#fff3bf;}
+.pill.alert-crit{border-color:rgba(255,0,60,0.65);background:rgba(255,0,60,0.16);color:#ffd6df;}
+.pill.live .dot{animation:blink 1s ease infinite;}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--neon);}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
+
+/* ── MARQUEE ── */
+.marquee-bar{
+  flex-shrink:0;height:22px;
+  background:rgba(0,255,224,0.04);
+  border-bottom:1px solid var(--border);
+  overflow:hidden;display:flex;align-items:center;
+}
+.marquee-inner{
+  display:flex;gap:40px;
+  white-space:nowrap;
+  animation:scroll-marquee 30s linear infinite;
+  font-size:10px;font-family:var(--font-mono);color:var(--text2);
+  padding:0 20px;
+}
+@keyframes scroll-marquee{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+.marquee-item{color:var(--neon);margin-right:6px;}
+
+/* ── CONTROL BAR ── */
+.ctrl-bar{
+  flex-shrink:0;
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  padding:8px 20px;
+  background:rgba(0,10,22,0.9);
+  border-bottom:1px solid var(--border);
+  z-index:50;
+}
+.section-switch{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.sbtn{
+  padding:4px 10px;border-radius:6px;
+  border:1px solid var(--border);background:rgba(0,255,224,0.02);
+  color:var(--text);font-size:10px;font-family:var(--font-mono);
+  cursor:pointer;transition:all 0.2s;
+}
+.sbtn:hover{border-color:var(--neon);color:var(--neon);}
+.sbtn.sel{background:rgba(0,255,224,0.12);border-color:var(--neon);color:var(--neon);}
+.ctrl-lbl{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;}
+.algo-btns{display:flex;gap:5px;}
+.abtn{
+  padding:4px 12px;border-radius:6px;
+  border:1px solid var(--border);background:transparent;
+  color:var(--text);font-size:11px;font-family:var(--font-mono);
+  cursor:pointer;transition:all 0.2s;letter-spacing:0.05em;
+}
+.abtn:hover{border-color:var(--neon);color:var(--neon);}
+.abtn.sel{background:rgba(0,255,224,0.1);border-color:var(--neon);color:var(--neon);text-shadow:0 0 8px rgba(0,255,224,0.5);}
+.sep{width:1px;height:18px;background:var(--border2);}
+.cbtn{
+  padding:4px 12px;border-radius:6px;
+  border:1px solid var(--border);background:transparent;
+  color:var(--text);font-size:11px;font-family:var(--font-mono);cursor:pointer;transition:all 0.2s;
+}
+.cbtn:hover{background:rgba(255,255,255,0.05);}
+.cbtn.ghost-btn{border-color:rgba(123,47,255,0.4);color:var(--neon2);}
+.cbtn.ghost-btn:hover{background:rgba(123,47,255,0.1);}
+
+/* ── MAIN 4-ZONE GRID ── */
+.main-grid{
+  flex:1;overflow:hidden;
+  display:grid;
+  grid-template-columns:260px 1fr 280px;
+  grid-template-rows:1fr 180px;
+  gap:1px;
+  background:var(--border);
+  position:relative;z-index:1;
+}
+.main-grid.focused{
+  grid-template-columns:1fr;
+  grid-template-rows:1fr;
+}
+
+.zone{
+  background:rgba(2,4,8,0.96);
+  padding:12px;overflow:hidden;
+  position:relative;
+}
+.zone-a{grid-row:1;grid-column:1;}
+.zone-b{grid-row:1;grid-column:2;}
+.zone-c{grid-row:1;grid-column:3;overflow-y:auto;}
+.zone-d{grid-row:2;grid-column:1/4;padding:10px 16px;}
+.zone-c.focused-subpanel,
+.zone-d.focused-subpanel{overflow:hidden;}
+.zone-c.focused-subpanel{display:flex;flex-direction:column;}
+.zone-d.focused-subpanel{padding:10px 16px;}
+.zone-d-inner.focused-subpanel{grid-template-columns:1fr;}
+.panel-focus{
+  display:flex !important;
+  flex-direction:column !important;
+  width:100% !important;
+  min-height:0 !important;
+  flex:1 1 auto !important;
+}
+.panel-focus{
+  animation:panel-slide-in 0.28s ease both;
+}
+.panel-focus.panel-grid{
+  display:grid !important;
+}
+.zone-c .panel-focus{margin-bottom:0 !important;}
+.zone-c.focused-subpanel > :not(.panel-hidden):not(.zone-title){
+  flex:1 1 auto;
+}
+.zone-c.focused-subpanel #zoneCMetrics.panel-focus{
+  display:grid !important;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+  align-content:start;
+}
+.zone-c.focused-subpanel #zoneCAlgo.panel-focus,
+.zone-c.focused-subpanel #zoneCML.panel-focus,
+.zone-c.focused-subpanel #zoneCBattle.panel-focus,
+.zone-c.focused-subpanel #zoneCDNA.panel-focus{
+  min-height:0;
+  overflow:auto;
+}
+.zone-d.focused-subpanel #zoneDGantt.panel-focus,
+.zone-d.focused-subpanel #zoneDInsights.panel-focus,
+.zone-d.focused-subpanel #zoneDLog.panel-focus,
+.zone-d.focused-subpanel #zoneDLegacy.panel-focus{
+  min-height:0;
+  overflow:auto;
+}
+.zone-d.focused-subpanel #zoneDGantt.panel-focus{display:block !important;}
+.zone-d.focused-subpanel #zoneDInsights.panel-focus{display:flex !important;}
+.zone-d.focused-subpanel #zoneDLog.panel-focus{display:block !important;}
+.zone-d.focused-subpanel #zoneDLegacy.panel-focus{display:flex !important;}
+
+@keyframes panel-slide-in{
+  from{opacity:0;transform:translateX(18px) scale(0.985);}
+  to{opacity:1;transform:translateX(0) scale(1);}
+}
+.main-grid.focused .zone{grid-row:1 !important;grid-column:1 !important;}
+.main-grid.focused .zone-d{padding:12px !important;}
+
+.zone-title{
+  font-family:var(--font-display);font-size:10px;font-weight:700;
+  letter-spacing:0.2em;color:var(--text3);text-transform:uppercase;
+  margin-bottom:8px;display:flex;align-items:center;gap:8px;
+}
+.zone-title::before{content:'';width:12px;height:1px;background:var(--neon);display:block;}
+
+/* ── ZONE A — Process Tree ── */
+#procTreeSvg{width:100%;height:calc(100% - 24px);display:block;}
+
+/* ── ZONE B — Central Canvas ── */
+#nexusCanvas{
+  width:100%;height:100%;display:block;
+  position:absolute;top:0;left:0;
+}
+.zone-b-shell{
+  position:relative;width:100%;height:100%;overflow:hidden;
+  background:radial-gradient(circle at center, rgba(0,255,224,0.04), rgba(2,4,8,0.96) 60%);
+}
+.zone-b-hud{
+  position:absolute;inset:0;z-index:5;pointer-events:none;
+  display:flex;flex-direction:column;justify-content:space-between;padding:12px;
+}
+.zone-b-top,.zone-b-bottom{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;}
+.zone-b-card{
+  pointer-events:auto;background:rgba(0,10,22,0.74);border:1px solid var(--border);
+  border-radius:8px;backdrop-filter:blur(12px);box-shadow:0 0 24px rgba(0,0,0,0.18);
+}
+.zone-b-card.pad{padding:10px 12px;}
+.zone-b-title{
+  font-family:var(--font-display);font-size:11px;letter-spacing:0.18em;
+  color:var(--neon);text-transform:uppercase;
+}
+.zone-b-sub{font-size:9px;color:var(--text2);line-height:1.5;margin-top:4px;}
+.zone-b-focus{max-width:320px;min-width:220px;}
+.zone-b-meta{font-size:10px;color:var(--text2);line-height:1.6;margin-top:6px;}
+.zone-b-meta b{color:var(--text);font-weight:600;}
+.zone-b-history{margin-top:8px;display:grid;gap:7px;}
+.zone-b-history-row{display:grid;grid-template-columns:62px 1fr;gap:8px;align-items:center;}
+.zone-b-history-label{font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;}
+.zone-b-history-bar{
+  height:9px;border-radius:999px;background:rgba(255,255,255,0.06);
+  overflow:hidden;border:1px solid rgba(255,255,255,0.05);
+}
+.zone-b-history-fill{height:100%;width:0%;border-radius:999px;transition:width 0.2s ease;}
+.zone-b-history-fill.cpu{background:linear-gradient(90deg,#00ffe0,#4e9eff);} 
+.zone-b-history-fill.mem{background:linear-gradient(90deg,#7b2fff,#ffd60a);} 
+.zone-b-history-fill.wait{background:linear-gradient(90deg,#ffd60a,#ff003c);} 
+.zone-b-mini-stats{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;}
+.zone-b-mini-stat{padding:5px 7px;border-radius:999px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05);font-size:9px;color:var(--text2);}
+.zone-b-mini-stat strong{color:var(--text);}
+.zone-b-stats{display:grid;grid-template-columns:repeat(3,minmax(70px,1fr));gap:6px;min-width:min(310px,100%);}
+.zone-b-stat{padding:8px 10px;border-radius:7px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);}
+.zone-b-stat .k{font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;}
+.zone-b-stat .v{font-family:var(--font-display);font-size:16px;font-weight:800;margin-top:3px;}
+.zone-b-controls{display:flex;gap:6px;flex-wrap:wrap;}
+.zone-b-btn{
+  pointer-events:auto;border:1px solid var(--border2);background:rgba(0,255,224,0.04);color:var(--text);
+  border-radius:6px;padding:7px 10px;font-family:var(--font-mono);font-size:10px;cursor:pointer;
+}
+.zone-b-btn:hover{border-color:var(--neon);color:var(--neon);}
+.zone-b-btn.sel{background:rgba(0,255,224,0.14);border-color:var(--neon);color:var(--neon);}
+.zone-b-minirow{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;}
+.zone-b-chip{padding:5px 8px;border-radius:999px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05);font-size:9px;color:var(--text2);}
+.zone-b-chip strong{color:var(--text);}
+
+/* ── ZONE C — Algo Explainer ── */
+.algo-card{
+  background:rgba(0,255,224,0.04);
+  border:1px solid var(--border);border-radius:8px;
+  padding:10px 12px;margin-bottom:8px;
+}
+.algo-name{
+  font-family:var(--font-display);font-size:13px;font-weight:900;
+  letter-spacing:0.08em;margin-bottom:6px;
+}
+.algo-formula{
+  font-family:var(--font-mono);font-size:11px;color:var(--text);
+  line-height:1.7;word-break:break-all;
+}
+.algo-explain{
+  font-family:var(--font-mono);font-size:11px;color:var(--text);
+  line-height:1.7;margin-top:6px;border-top:1px solid var(--border);padding-top:6px;
+}
+
+.state-machine{width:100%;height:70px;display:block;margin:6px 0;}
+
+.metric-mini{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;}
+.mm{
+  background:rgba(0,255,224,0.05);border:1px solid var(--border2);
+  border-radius:8px;padding:8px 10px;
+}
+.mm.sev-ok{
+  border-color:rgba(0,255,136,0.45);
+  background:rgba(0,255,136,0.08);
+  box-shadow:0 0 14px rgba(0,255,136,0.12);
+}
+.mm.sev-warn{
+  border-color:rgba(255,214,10,0.55);
+  background:rgba(255,214,10,0.10);
+  box-shadow:0 0 14px rgba(255,214,10,0.16);
+}
+.mm.sev-crit{
+  border-color:rgba(255,0,60,0.65);
+  background:rgba(255,0,60,0.12);
+  box-shadow:0 0 16px rgba(255,0,60,0.2);
+}
+.mm-label{font-size:10px;color:#9ab2cf;letter-spacing:0.08em;text-transform:uppercase;}
+.mm-val{font-size:20px;font-weight:800;font-family:var(--font-display);margin-top:4px;line-height:1.2;}
+.mm-sub{font-size:10px;color:#9ab2cf;margin-top:3px;}
+.mm-bar{height:6px;border-radius:999px;background:rgba(255,255,255,0.1);overflow:hidden;margin-top:7px;}
+.mm-bar-fill{height:100%;width:0%;border-radius:999px;transition:width 0.25s ease;}
+
+.ml-card{
+  background:rgba(123,47,255,0.06);border:1px solid rgba(123,47,255,0.2);
+  border-radius:8px;padding:8px 10px;margin-bottom:8px;
+}
+.ml-title{font-size:8px;color:var(--neon2);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;}
+.ml-row{font-size:11px;color:var(--text);margin-bottom:2px;}
+
+.manual-card{
+  background:rgba(78,158,255,0.08);border:1px solid rgba(78,158,255,0.28);
+  border-radius:8px;padding:10px;margin-bottom:8px;
+}
+.manual-title{font-size:9px;color:#8fc2ff;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;}
+.manual-help{font-size:10px;color:var(--text2);line-height:1.5;margin-bottom:8px;}
+.manual-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px;}
+.manual-grid input{
+  width:100%;padding:6px 7px;border-radius:6px;border:1px solid var(--border2);
+  background:rgba(0,8,18,0.7);color:var(--text);font-size:11px;font-family:var(--font-mono);
+}
+.manual-actions{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;}
+.manual-btn{
+  padding:6px 8px;border-radius:6px;border:1px solid rgba(78,158,255,0.4);
+  background:rgba(78,158,255,0.08);color:#b9d8ff;font-size:10px;font-family:var(--font-mono);cursor:pointer;
+}
+.manual-btn:hover{border-color:#8fc2ff;color:#e5f3ff;}
+.manual-btn.active{background:rgba(0,255,136,0.12);border-color:rgba(0,255,136,0.5);color:#caffde;}
+.manual-list{max-height:130px;overflow:auto;border:1px solid var(--border);border-radius:6px;background:rgba(0,0,0,0.2);padding:6px;}
+.manual-item{font-size:10px;color:var(--text);padding:4px 2px;border-bottom:1px solid rgba(255,255,255,0.05);}
+.manual-item:last-child{border-bottom:none;}
+.manual-status{font-size:10px;color:var(--text2);margin-bottom:6px;}
+.manual-demograph{margin-top:8px;border-top:1px solid rgba(255,255,255,0.08);padding-top:8px;}
+.manual-demograph-title{font-size:9px;color:#9fc6ff;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px;}
+.manual-demo-row{margin-bottom:6px;}
+.manual-demo-head{display:flex;justify-content:space-between;font-size:10px;color:var(--text2);margin-bottom:3px;}
+.manual-demo-track{height:7px;border-radius:999px;background:rgba(255,255,255,0.08);overflow:hidden;position:relative;}
+.manual-demo-req{position:absolute;left:0;top:0;bottom:0;background:rgba(255,214,10,0.7);}
+.manual-demo-alloc{position:absolute;left:0;top:0;bottom:0;background:rgba(0,255,136,0.8);}
+.manual-demo-track.mem .manual-demo-req{background:rgba(123,47,255,0.78);}
+.manual-demo-track.mem .manual-demo-alloc{background:rgba(78,158,255,0.86);}
+
+/* ── DNA strip ── */
+.dna-strip{display:flex;gap:2px;align-items:center;margin-top:3px;}
+.dna-bar{width:4px;border-radius:1px;background:var(--neon);opacity:0.6;}
+
+/* ── Battle mode ── */
+.battle-card{
+  background:rgba(255,214,10,0.04);border:1px solid rgba(255,214,10,0.15);
+  border-radius:8px;padding:8px 10px;margin-bottom:8px;
+}
+.battle-title{font-size:8px;color:var(--gold);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;}
+.battle-row{
+  display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:9px;
+}
+.battle-name{width:80px;color:var(--text2);flex-shrink:0;}
+.battle-bar-bg{flex:1;height:6px;background:rgba(255,255,255,0.05);border-radius:3px;overflow:hidden;}
+.battle-bar-fill{height:100%;border-radius:3px;transition:width 0.5s ease;}
+.battle-score{width:36px;text-align:right;color:var(--text);font-family:var(--font-mono);}
+.battle-crown{color:var(--gold);}
+
+/* ── ZONE D — Gantt + charts ── */
+.zone-d-inner{
+  display:grid;grid-template-columns:1.2fr 360px 280px;
+  gap:12px;height:100%;
+}
+.panel-hidden{display:none !important;}
+.zone-hidden{display:none !important;}
+.zone-focus{
+  animation:zone-slide-in 0.32s ease both;
+}
+@keyframes zone-slide-in{
+  from{opacity:0;transform:translateX(22px) scale(0.99);}
+  to{opacity:1;transform:translateX(0) scale(1);}
+}
+#ganttCanvas{width:100%;height:100%;display:block;}
+.gantt-wrap{position:relative;height:100%;}
+.gantt-guide{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  margin:4px 0 6px 0;font-size:10px;color:#a7bed9;
+}
+.gchip{display:inline-flex;align-items:center;gap:5px;}
+.gdot{width:9px;height:9px;border-radius:2px;display:inline-block;}
+.gantt-note{font-size:10px;color:#8ca6c5;line-height:1.4;}
+#ganttTip{
+  position:absolute;display:none;pointer-events:none;z-index:20;
+  background:rgba(2,8,20,0.95);border:1px solid var(--border2);
+  color:var(--text);font-size:10px;border-radius:6px;padding:6px 8px;
+  box-shadow:0 8px 20px rgba(0,0,0,0.35);
+}
+#zoneBHoverTip{
+  position:absolute;display:none;pointer-events:none;z-index:20;
+  background:rgba(2,8,20,0.95);border:1px solid var(--border2);
+  color:var(--text);font-size:9px;border-radius:6px;padding:6px 8px;
+  box-shadow:0 8px 20px rgba(0,0,0,0.35);
+  line-height:1.4;max-width:160px;font-family:var(--font-mono);
+}
+.insight-panel{display:flex;flex-direction:column;gap:8px;height:100%;}
+.insight-card{
+  background:rgba(0,255,224,0.03);
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:8px;
+}
+.insight-card.alert-ok{border-color:rgba(0,255,136,0.45);background:rgba(0,255,136,0.08);}
+.insight-card.alert-warn{border-color:rgba(255,214,10,0.55);background:rgba(255,214,10,0.10);}
+.insight-card.alert-crit{border-color:rgba(255,0,60,0.65);background:rgba(255,0,60,0.12);}
+.insight-title{font-size:10px;color:var(--text2);letter-spacing:0.06em;margin-bottom:6px;text-transform:uppercase;}
+.trend-wrap{height:110px;}
+.trend-wrap canvas{width:100%;height:100%;display:block;}
+.pie-wrap{display:grid;grid-template-columns:1fr 1fr;gap:8px;height:150px;}
+.pie-wrap canvas{width:100%;height:100%;display:block;}
+
+/* ── LOG ── */
+.log-area{
+  background:rgba(0,0,0,0.5);border-radius:6px;
+  border:1px solid var(--border);
+  height:100%;overflow-y:auto;padding:6px 8px;
+}
+.log-line{font-size:11px;line-height:1.6;color:var(--text2);border-bottom:1px solid rgba(255,255,255,0.02);}
+.log-line .ts{color:var(--text3);}
+.log-line.warn{color:var(--gold);}
+.log-line.ok{color:var(--green);}
+.log-line.info{color:var(--neon);}
+.log-line.critical{color:var(--red);font-weight:600;}
+.log-line.boot{color:var(--neon2);}
+
+/* ── Bottleneck shockwave overlay ── */
+#shockwave{
+  position:fixed;inset:0;pointer-events:none;z-index:998;
+  border-radius:0;
+  box-shadow:inset 0 0 0px rgba(255,0,60,0);
+  transition:box-shadow 0.1s ease;
+}
+#shockwave.firing{
+  animation:shockwave-anim 0.8s ease-out forwards;
+}
+@keyframes shockwave-anim{
+  0%{box-shadow:inset 0 0 0px rgba(255,0,60,0.8)}
+  100%{box-shadow:inset 0 0 120px rgba(255,0,60,0)}
+}
+
+/* ── Ghost Replay overlay ── */
+#ghostOverlay{
+  display:none;position:fixed;inset:0;z-index:500;
+  background:rgba(0,0,0,0.85);
+  align-items:center;justify-content:center;flex-direction:column;gap:12px;
+}
+#ghostOverlay.active{display:flex;}
+.ghost-title{font-family:var(--font-display);font-size:18px;color:var(--neon2);letter-spacing:0.2em;}
+.ghost-bar{width:60%;height:4px;background:rgba(255,255,255,0.1);border-radius:2px;overflow:hidden;}
+.ghost-fill{height:100%;background:var(--neon2);transition:width 0.1s linear;}
+.ghost-lbl{font-size:11px;color:var(--text2);font-family:var(--font-mono);}
+.ghost-close{
+  padding:8px 20px;border-radius:6px;background:transparent;
+  border:1px solid var(--neon2);color:var(--neon2);
+  font-family:var(--font-mono);cursor:pointer;margin-top:8px;
+}
+
+/* ── 3D Memory Map ── */
+#mem3d{
+  width:100%;height:100%;display:block;
+}
+
+/* ── Process detail popup ── */
+#procPopup{
+  display:none;position:fixed;z-index:300;
+  background:rgba(2,8,20,0.97);border:1px solid var(--border2);
+  border-radius:10px;padding:14px;min-width:220px;
+  box-shadow:0 0 30px rgba(0,255,224,0.15);
+  font-family:var(--font-mono);font-size:11px;
+}
+.popup-close{float:right;cursor:pointer;color:var(--text3);}
+.popup-row{display:flex;justify-content:space-between;margin-bottom:4px;font-size:10px;}
+.popup-key{color:var(--text2);}
+.popup-val{color:var(--neon);}
+
+/* scrollbar */
+::-webkit-scrollbar{width:3px;}
+::-webkit-scrollbar-thumb{background:rgba(0,255,224,0.2);border-radius:2px;}
+
+/* ── Responsive shrink ── */
+@media(max-width:1100px){
+  .main-grid{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr 160px;}
+  .zone-a{grid-row:1;grid-column:1;}
+  .zone-b{grid-row:1;grid-column:2;}
+  .zone-c{grid-row:2;grid-column:1/3;}
+  .zone-d{grid-row:3;grid-column:1/3;}
+  .zone-d-inner{grid-template-columns:1fr;grid-template-rows:180px 300px 220px;}
+}
+</style>
+</head>
+<body>
+
+<!-- Shockwave overlay -->
+<div id="shockwave"></div>
+
+<!-- Ghost Replay overlay -->
+<div id="ghostOverlay">
+  <div class="ghost-title">◈ GHOST REPLAY</div>
+  <div class="ghost-bar"><div class="ghost-fill" id="ghostFill" style="width:0%"></div></div>
+  <div class="ghost-lbl" id="ghostLbl">Tick 0 / 0</div>
+  <button class="ghost-close" onclick="stopGhost()">✕ Close</button>
+</div>
+
+<!-- Process popup -->
+<div id="procPopup">
+  <span class="popup-close" onclick="document.getElementById('procPopup').style.display='none'">✕</span>
+  <div id="procPopupContent"></div>
+</div>
+
+<!-- HEADER -->
+<div class="nexus-header">
+  <div class="brand">
+    <div class="brand-orb" id="mainOrb"></div>
+    <div>
+      <div class="brand-name">NEXUS-7</div>
+      <div class="brand-sub">SENTIENT RESOURCE ORCHESTRATION ENGINE</div>
+    </div>
+  </div>
+  <div class="header-pills">
+    <span class="pill live"><span class="dot"></span><span id="tickPill">TICK 0</span></span>
+    <span class="pill" id="schedPill">NEXUS AI</span>
+    <span class="pill" id="bottlePill">STABLE</span>
+    <span class="pill" id="collPill">COLLISION 0</span>
+    <span class="pill" id="cpuPill">CPU —</span>
+    <span class="pill" id="memPill">MEM —</span>
+    <span class="pill" id="uptimePill">UP —</span>
+  </div>
+</div>
+
+<!-- MARQUEE -->
+<div class="marquee-bar">
+  <div class="marquee-inner" id="marqueeInner">
+    <span>NEXUS-7 ONLINE</span><span class="marquee-item">◈</span>
+    <span>INITIALIZING ADAPTIVE SCHEDULER</span><span class="marquee-item">◈</span>
+    <span>BINDING TO SYSTEM KERNEL</span><span class="marquee-item">◈</span>
+    <span>AWAITING FIRST TICK</span><span class="marquee-item">◈</span>
+    <span>NEXUS-7 ONLINE</span><span class="marquee-item">◈</span>
+    <span>INITIALIZING ADAPTIVE SCHEDULER</span><span class="marquee-item">◈</span>
+    <span>BINDING TO SYSTEM KERNEL</span><span class="marquee-item">◈</span>
+    <span>AWAITING FIRST TICK</span><span class="marquee-item">◈</span>
+  </div>
+</div>
+
+<!-- CONTROL BAR -->
+<div class="ctrl-bar">
+  <span class="ctrl-lbl">Scheduler</span>
+  <div class="algo-btns" id="algoGroup">
+    <button class="abtn sel" data-key="nexus" onclick="setScheduler('nexus')">NEXUS AI</button>
+    <button class="abtn" data-key="rr" onclick="setScheduler('rr')">ROUND ROBIN</button>
+    <button class="abtn" data-key="priority" onclick="setScheduler('priority')">PRIORITY</button>
+    <button class="abtn" data-key="sjf" onclick="setScheduler('sjf')">SJF</button>
+    <button class="abtn" data-key="mlq" onclick="setScheduler('mlq')">MLQ</button>
+    <button class="abtn" data-key="mlfq" onclick="setScheduler('mlfq')">MLFQ</button>
+  </div>
+  <div class="sep"></div>
+  <button class="cbtn" onclick="socket.emit('add_process')">+ PROCESS</button>
+  <button class="cbtn" onclick="socket.emit('remove_process')">− PROCESS</button>
+  <div class="sep"></div>
+  <button class="cbtn ghost-btn" onclick="requestGhost()">◈ GHOST REPLAY</button>
+  <div class="sep"></div>
+  <span class="ctrl-lbl">Zone D Sections</span>
+  <div class="section-switch" id="zoneDSwitch">
+    <button class="sbtn sel" data-panel="gantt" onclick="setZoneDPanel('gantt')">Gantt</button>
+    <button class="sbtn" data-panel="insights" onclick="setZoneDPanel('insights')">Insights</button>
+    <button class="sbtn" data-panel="log" onclick="setZoneDPanel('log')">Log</button>
+    <button class="sbtn" data-panel="legacy" onclick="setZoneDPanel('legacy')">Legacy</button>
+  </div>
+  <div class="sep"></div>
+  <span class="ctrl-lbl">Zone C Sections</span>
+  <div class="section-switch" id="zoneCSwitch">
+    <button class="sbtn sel" data-panel="all" onclick="setZoneCPanel('all')">All</button>
+    <button class="sbtn" data-panel="metrics" onclick="setZoneCPanel('metrics')">Metrics</button>
+    <button class="sbtn" data-panel="algorithm" onclick="setZoneCPanel('algorithm')">Algorithm</button>
+    <button class="sbtn" data-panel="ml" onclick="setZoneCPanel('ml')">ML</button>
+    <button class="sbtn" data-panel="battle" onclick="setZoneCPanel('battle')">Battle</button>
+    <button class="sbtn" data-panel="dna" onclick="setZoneCPanel('dna')">DNA</button>
+    <button class="sbtn" data-panel="manual" onclick="setZoneCPanel('manual')">Manual</button>
+  </div>
+  <div class="sep"></div>
+  <span class="ctrl-lbl">Main Zones</span>
+  <div class="section-switch" id="mainZoneSwitch">
+    <button class="sbtn sel" data-panel="all" onclick="setMainZonePanel('all')">All</button>
+    <button class="sbtn" data-panel="zoneA" onclick="setMainZonePanel('zoneA')">Zone A</button>
+    <button class="sbtn" data-panel="zoneB" onclick="setMainZonePanel('zoneB')">Zone B</button>
+    <button class="sbtn" data-panel="zoneC" onclick="setMainZonePanel('zoneC')">Zone C</button>
+    <button class="sbtn" data-panel="zoneD" onclick="setMainZonePanel('zoneD')">Zone D</button>
+  </div>
+</div>
+
+<!-- MAIN 4-ZONE GRID -->
+<div class="main-grid">
+
+  <!-- ZONE A: Neural Process Tree -->
+  <div class="zone zone-a" id="zoneA">
+    <div class="zone-title">Zone A — Neural Process Tree</div>
+    <svg id="procTreeSvg" xmlns="http://www.w3.org/2000/svg"></svg>
+  </div>
+
+  <!-- ZONE B: Central Orbital Canvas -->
+  <div class="zone zone-b" id="zoneB" style="padding:0;position:relative;">
+    <div class="zone-b-shell">
+      <canvas id="nexusCanvas"></canvas>
+      <div id="zoneBHoverTip"></div>
+      <div class="zone-b-hud">
+        <div class="zone-b-top">
+          <div class="zone-b-card pad" style="max-width:380px;">
+            <div class="zone-b-title">Zone B — Live Orbital Kernel</div>
+            <div class="zone-b-sub">Click a process dot to inspect it. Freeze the orbit, adjust speed, or focus only on active tasks.</div>
+          </div>
+          <div class="zone-b-card pad zone-b-focus" id="zoneBFocusCard">
+            <div class="zone-b-title" id="zoneBFocusTitle">No process selected</div>
+            <div class="zone-b-meta" id="zoneBFocusMeta">Select a process dot to inspect PID, workload, allocation, and state.</div>
+            <div class="zone-b-history">
+              <div class="zone-b-history-row">
+                <div class="zone-b-history-label">CPU History</div>
+                <div class="zone-b-history-bar"><div class="zone-b-history-fill cpu" id="zbHistCpu"></div></div>
+              </div>
+              <div class="zone-b-history-row">
+                <div class="zone-b-history-label">Memory History</div>
+                <div class="zone-b-history-bar"><div class="zone-b-history-fill mem" id="zbHistMem"></div></div>
+              </div>
+              <div class="zone-b-history-row">
+                <div class="zone-b-history-label">Wait Trend</div>
+                <div class="zone-b-history-bar"><div class="zone-b-history-fill wait" id="zbHistWait"></div></div>
+              </div>
+            </div>
+            <div class="zone-b-mini-stats">
+              <span class="zone-b-mini-stat"><strong id="zbFocusPid">—</strong></span>
+              <span class="zone-b-mini-stat"><strong id="zbFocusPrio">—</strong> prio</span>
+              <span class="zone-b-mini-stat"><strong id="zbFocusCredit">—</strong> credit</span>
+            </div>
+          </div>
+        </div>
+        <div class="zone-b-bottom">
+          <div class="zone-b-card pad zone-b-stats">
+            <div class="zone-b-stat"><div class="k">CPU Used</div><div class="v" id="zbCpu">—</div></div>
+            <div class="zone-b-stat"><div class="k">Memory%</div><div class="v" id="zbMem">—</div></div>
+            <div class="zone-b-stat"><div class="k">Running</div><div class="v" id="zbRun">—</div></div>
+            <div class="zone-b-stat"><div class="k">Waiting</div><div class="v" id="zbWait">—</div></div>
+            <div class="zone-b-stat"><div class="k">Blocked</div><div class="v" id="zbBlock">—</div></div>
+            <div class="zone-b-stat"><div class="k">Scheduler</div><div class="v" id="zbSched">—</div></div>
+          </div>
+          <div class="zone-b-card pad">
+            <div class="zone-b-controls">
+              <button class="zone-b-btn" id="zbFreezeBtn" onclick="toggleNexusFreeze()">Freeze</button>
+              <button class="zone-b-btn" id="zbTrailBtn" onclick="toggleNexusTrails()">Trails On</button>
+              <button class="zone-b-btn" onclick="setNexusSpeed(0.5)">0.5x</button>
+              <button class="zone-b-btn sel" id="zbSpeed1" onclick="setNexusSpeed(1)">1x</button>
+              <button class="zone-b-btn" onclick="setNexusSpeed(1.8)">1.8x</button>
+              <button class="zone-b-btn" onclick="focusRunningProcess()">Focus Running</button>
+            </div>
+            <div class="zone-b-minirow">
+              <span class="zone-b-chip"><strong id="zbFocusMode">Orbit</strong> mode</span>
+              <span class="zone-b-chip"><strong id="zbSpeedLabel">1x</strong> speed</span>
+              <span class="zone-b-chip"><strong id="zbTrailsLabel">On</strong> trails</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ZONE C: Algorithm Explainer -->
+  <div class="zone zone-c" id="zoneC">
+    <div class="zone-title">Zone C — Algorithm Core</div>
+
+    <!-- Metric minis -->
+    <div class="metric-mini" id="zoneCMetrics">
+      <div class="mm" id="mmCpuCard">
+        <div class="mm-label">CPU Pressure</div>
+        <div class="mm-val" id="mmCpuP" style="color:var(--neon)">—</div>
+        <div class="mm-sub" id="mmCpuPSub">EWMA load pressure</div>
+        <div class="mm-bar"><div class="mm-bar-fill" id="mmCpuPBar" style="background:var(--neon)"></div></div>
+      </div>
+      <div class="mm" id="mmMemCard">
+        <div class="mm-label">Memory Pressure</div>
+        <div class="mm-val" id="mmMemP" style="color:var(--neon2)">—</div>
+        <div class="mm-sub" id="mmMemPSub">EWMA memory pressure</div>
+        <div class="mm-bar"><div class="mm-bar-fill" id="mmMemPBar" style="background:var(--neon2)"></div></div>
+      </div>
+      <div class="mm">
+        <div class="mm-label">CPU Allocation</div>
+        <div class="mm-val" id="mmAcpu" style="color:var(--green)">—</div>
+        <div class="mm-sub" id="mmAcpuSub">0% of requested CPU</div>
+        <div class="mm-bar"><div class="mm-bar-fill" id="mmAcpuBar" style="background:var(--green)"></div></div>
+      </div>
+      <div class="mm">
+        <div class="mm-label">Memory Allocation</div>
+        <div class="mm-val" id="mmAmem" style="color:var(--gold)">—</div>
+        <div class="mm-sub" id="mmAmemSub">0% of requested memory</div>
+        <div class="mm-bar"><div class="mm-bar-fill" id="mmAmemBar" style="background:var(--gold)"></div></div>
+      </div>
+    </div>
+
+    <!-- Active algo card -->
+    <div class="algo-card" id="zoneCAlgo">
+      <div id="algoCard">
+      <div class="algo-name" id="algoName" style="color:var(--neon)">NEXUS ADAPTIVE AI</div>
+      <div class="algo-formula" id="algoFormula">—</div>
+      <!-- State machine -->
+      <svg class="state-machine" id="stateMachSvg" viewBox="0 0 240 60" xmlns="http://www.w3.org/2000/svg"></svg>
+      <div class="algo-explain" id="algoExplain">Awaiting first tick…</div>
+      </div>
+    </div>
+
+    <!-- ML Prediction -->
+    <div class="ml-card" id="zoneCML">
+      <div class="ml-title">ML Prediction (Linear Regression)</div>
+      <div class="ml-row" id="mlPredCpu">Est. CPU avail: —</div>
+      <div class="ml-row" id="mlPredMem">Est. Mem avail: —</div>
+      <div class="ml-row" id="mlTrend" style="font-size:9px;color:var(--text2)">Trend: awaiting data…</div>
+    </div>
+
+    <!-- Battle mode -->
+    <div class="battle-card" id="zoneCBattle">
+      <div class="battle-title">⚔ Algorithm Battle — every 10 ticks</div>
+      <div id="battleRows">awaiting battle data…</div>
+    </div>
+
+    <!-- Process DNA list -->
+    <div class="algo-card" id="zoneCDNA">
+      <div class="zone-title" style="margin-bottom:6px;">Process DNA Fingerprints</div>
+      <div id="dnaList"></div>
+    </div>
+
+    <div class="manual-card" id="zoneCManual">
+      <div class="manual-title">Manual Input Allocation Control</div>
+      <div class="manual-help">
+        Enter PID-wise request values. When manual mode is enabled, allocation uses these values instead of random generated requests.
+      </div>
+      <div class="manual-status" id="manualModeStatus">Mode: Auto (random requests)</div>
+      <div class="manual-grid">
+        <input id="manualPid" type="number" min="1" placeholder="PID"/>
+        <input id="manualCpu" type="number" min="0" step="0.1" placeholder="CPU request (%)"/>
+        <input id="manualMem" type="number" min="0" step="0.1" placeholder="Memory request (MB)"/>
+      </div>
+      <div class="manual-actions">
+        <button class="manual-btn" id="manualModeBtn" onclick="toggleManualMode()">Enable Manual Mode</button>
+        <button class="manual-btn" onclick="addManualEntry()">Add/Update Entry</button>
+        <button class="manual-btn" onclick="removeManualEntry()">Remove PID</button>
+        <button class="manual-btn" onclick="clearManualEntries()">Clear All Entries</button>
+      </div>
+      <div class="manual-list" id="manualEntryList">No manual entries yet.</div>
+      <div class="manual-demograph" id="manualDemograph">
+        <div class="manual-demograph-title">Real-Time Demograph (CPU and Memory)</div>
+        <div class="manual-status">Waiting for runtime data...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ZONE D: Gantt + History + Log -->
+  <div class="zone zone-d" id="zoneD">
+    <div class="zone-d-inner">
+      <div id="zoneDGantt">
+        <div class="zone-title">Zone D — Live Gantt Timeline</div>
+        <div class="gantt-guide">
+          <span class="gchip"><span class="gdot" style="background:#00ff88"></span>Running</span>
+          <span class="gchip"><span class="gdot" style="background:#4e9eff"></span>Ready</span>
+          <span class="gchip"><span class="gdot" style="background:#ffd60a"></span>Waiting</span>
+          <span class="gchip"><span class="gdot" style="background:#ff003c"></span>Blocked</span>
+          <span class="gchip"><span class="gdot" style="background:linear-gradient(90deg,#355d85,#b7ecff)"></span>Brighter block = more CPU</span>
+        </div>
+        <div class="gantt-note">Rows are processes (PIDs). Columns are recent ticks from left to right. Hover any block to see exact tick, PID, state, and CPU allocation.</div>
+        <div class="gantt-wrap">
+          <canvas id="ganttCanvas" role="img" aria-label="Gantt chart of process CPU allocation over time"></canvas>
+          <div id="ganttTip"></div>
+        </div>
+      </div>
+      <div class="insight-panel" id="zoneDInsights">
+        <div class="insight-card" id="zoneDTrendCard">
+          <div class="insight-title">CPU and Memory Trend</div>
+          <div class="trend-wrap">
+            <canvas id="pressureTrendCanvas" role="img" aria-label="Line chart of CPU and memory history"></canvas>
+          </div>
+        </div>
+        <div class="insight-card" id="zoneDPieCard">
+          <div class="insight-title">Allocation and Process Mix</div>
+          <div class="pie-wrap">
+            <canvas id="allocPieCanvas" role="img" aria-label="Pie chart of request fulfillment"></canvas>
+            <canvas id="statePieCanvas" role="img" aria-label="Pie chart of process state distribution"></canvas>
+          </div>
+        </div>
+      </div>
+      <div id="zoneDLog">
+        <div class="zone-title">NEXUS Event Log</div>
+        <div class="log-area" id="logArea"></div>
+      </div>
+      <div class="insight-panel panel-hidden" id="zoneDLegacy">
+        <div class="insight-card" style="height:100%;">
+          <div class="insight-title">Legacy Integration Status</div>
+          <div id="legacySummary" style="font-size:12px;color:var(--text);line-height:1.7;">Waiting for first tick...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end main-grid -->
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+// SOCKET
+// ═══════════════════════════════════════════════════════════════════
+const socket = io();
+let lastState = null;
+let pressureTrendChart, allocPieChart, statePieChart;
+let ganttCtx, ganttCanvas;
+let ganttMeta = null;
+let nexusCtx, nexusCanvas;
+let orbAngle = 0, orbPulse = 0;
+let nexusSpeed = 1;
+let nexusFrozen = false;
+let nexusShowTrails = true;
+let nexusFocusPid = null;
+let nexusProcessPoints = [];
+let ghostPlaying = false, ghostData = [], ghostIdx = 0;
+let prevBottle = "none";
+let prevCollisionActive = false;
+let activeZoneDPanel = 'gantt';
+let activeZoneCPanel = 'all';
+let activeMainZonePanel = 'all';
+let manualModeEnabled = false;
+let manualOverrides = {};
+
+socket.on('state', data => {
+  lastState = data;
+  render(data);
+});
+
+socket.on('ghost_data', data => {
+  ghostData = data;
+  ghostIdx  = 0;
+  playGhost();
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', () => {
+  initInsightCharts();
+  initGantt();
+  initNexusCanvas();
+  initStateMachine();
+  initManualControls();
+  setZoneDPanel('gantt');
+  setZoneCPanel('all');
+  setMainZonePanel('all');
+  requestAnimationFrame(animLoop);
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════════════════════════════
+function render(d) {
+  updatePills(d);
+  updateZoneBHUD(d);
+  updateMetricMinis(d);
+  updateAlgoCard(d);
+  updateMLPred(d);
+  updateBattle(d);
+  updateProcTree(d.processes);
+  updateDNAList(d.processes);
+  updateGantt(d.gantt, d.processes);
+  updateInsightCharts(d);
+  renderLog(d.narration);
+  updateMarquee(d);
+  updateStateMachine(d.processes);
+  updateLegacySummary(d);
+  updateManualPanel(d);
+  if (d.bottleneck !== "none" && d.bottleneck !== prevBottle) fireShockwave();
+  if ((d.collision?.active) && !prevCollisionActive) fireShockwave();
+  prevCollisionActive = !!(d.collision && d.collision.active);
+  prevBottle = d.bottleneck;
+}
+
+function updateZoneBHUD(d) {
+  if (!d || !d.system) return;
+  const procs = d.processes || [];
+  const running = procs.filter(p => p.state === 'running').length;
+  const waiting = procs.filter(p => p.state === 'waiting').length;
+  const blocked = procs.filter(p => p.state === 'blocked').length;
+
+  document.getElementById('zbCpu').textContent = `${d.system.used_cpu.toFixed(0)}%`;
+  document.getElementById('zbMem').textContent = `${d.system.mem_pct.toFixed(0)}%`;
+  document.getElementById('zbRun').textContent = running;
+  document.getElementById('zbWait').textContent = waiting;
+  document.getElementById('zbBlock').textContent = blocked;
+  document.getElementById('zbSched').textContent = d.scheduler_name.split(' ')[0];
+
+  const selected = procs.find(p => p.pid === nexusFocusPid) || procs.find(p => p.state === 'running') || procs[0];
+  if (selected) updateNexusFocusCard(selected);
+}
+
+function toggleNexusFreeze() {
+  nexusFrozen = !nexusFrozen;
+  const btn = document.getElementById('zbFreezeBtn');
+  if (btn) {
+    btn.classList.toggle('sel', nexusFrozen);
+    btn.textContent = nexusFrozen ? 'Resume' : 'Freeze';
+  }
+}
+
+function toggleNexusTrails() {
+  nexusShowTrails = !nexusShowTrails;
+  const btn = document.getElementById('zbTrailBtn');
+  const label = document.getElementById('zbTrailsLabel');
+  if (btn) btn.textContent = nexusShowTrails ? 'Trails On' : 'Trails Off';
+  if (label) label.textContent = nexusShowTrails ? 'On' : 'Off';
+}
+
+function setNexusSpeed(speed) {
+  nexusSpeed = speed;
+  const label = document.getElementById('zbSpeedLabel');
+  if (label) label.textContent = `${speed.toFixed(1)}x`;
+  document.querySelectorAll('#zoneB .zone-b-btn').forEach(btn => btn.classList.toggle('sel', btn.textContent.trim() === '1x' && speed === 1));
+}
+
+function focusRunningProcess() {
+  if (!lastState) return;
+  const selected = lastState.processes.find(p => p.state === 'running') || lastState.processes[0];
+  if (selected) {
+    nexusFocusPid = selected.pid;
+    updateNexusFocusCard(selected);
+  }
+}
+
+function updateNexusFocusCard(proc) {
+  const title = document.getElementById('zoneBFocusTitle');
+  const meta = document.getElementById('zoneBFocusMeta');
+  const cpuFill = document.getElementById('zbHistCpu');
+  const memFill = document.getElementById('zbHistMem');
+  const waitFill = document.getElementById('zbHistWait');
+  const pidEl = document.getElementById('zbFocusPid');
+  const prioEl = document.getElementById('zbFocusPrio');
+  const creditEl = document.getElementById('zbFocusCredit');
+  if (!title || !meta || !proc) return;
+  title.textContent = `PID ${proc.pid} • ${proc.workload_type}`;
+  meta.innerHTML = `
+    <div><b>State:</b> <span style="color:${proc.color}">${proc.state}</span></div>
+    <div><b>Priority:</b> ${proc.priority}</div>
+    <div><b>Allocated:</b> ${proc.allocated_cpu.toFixed(1)}% CPU, ${proc.allocated_mem.toFixed(0)} MB</div>
+    <div><b>Wait Time:</b> ${proc.wait_time} ticks</div>
+    <div><b>Starvation Credit:</b> ${proc.starvation_credit.toFixed(2)}</div>
+  `;
+  if (pidEl) pidEl.textContent = `P${proc.pid}`;
+  if (prioEl) prioEl.textContent = `${proc.priority}`;
+  if (creditEl) creditEl.textContent = `${proc.starvation_credit.toFixed(2)}`;
+
+  const cpuHistory = Array.isArray(proc.history_cpu) ? proc.history_cpu : [];
+  const memHistory = Array.isArray(proc.history_mem) ? proc.history_mem : [];
+  const cpuPct = cpuHistory.length ? Math.max(0, Math.min(100, cpuHistory[cpuHistory.length - 1])) : 0;
+  const memPct = memHistory.length ? Math.max(0, Math.min(100, (memHistory[memHistory.length - 1] / 800) * 100)) : 0;
+  const waitPct = Math.max(0, Math.min(100, proc.wait_time * 20));
+
+  if (cpuFill) cpuFill.style.width = `${cpuPct.toFixed(1)}%`;
+  if (memFill) memFill.style.width = `${memPct.toFixed(1)}%`;
+  if (waitFill) waitFill.style.width = `${waitPct.toFixed(1)}%`;
+}
+
+function onNexusCanvasClick(evt) {
+  if (!nexusProcessPoints.length || !lastState) return;
+  const rect = nexusCanvas.getBoundingClientRect();
+  const x = evt.clientX - rect.left;
+  const y = evt.clientY - rect.top;
+  let best = null;
+  let bestDist = Infinity;
+  nexusProcessPoints.forEach(point => {
+    const dx = x - point.x;
+    const dy = y - point.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = point;
+    }
+  });
+  if (best && bestDist <= 18) {
+    nexusFocusPid = best.pid;
+    const proc = lastState.processes.find(p => p.pid === best.pid);
+    if (proc) {
+      updateNexusFocusCard(proc);
+      showPopup(proc.pid);
+    }
+  }
+}
+
+function onNexusCanvasHover(evt) {
+  if (!nexusProcessPoints.length || !lastState) return;
+  const tip = document.getElementById('zoneBHoverTip');
+  const rect = nexusCanvas.getBoundingClientRect();
+  const x = evt.clientX - rect.left;
+  const y = evt.clientY - rect.top;
+  
+  let best = null;
+  let bestDist = Infinity;
+  nexusProcessPoints.forEach(point => {
+    const dx = x - point.x;
+    const dy = y - point.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = point;
+    }
+  });
+  
+  if (best && bestDist <= 12) {
+    const proc = lastState.processes.find(p => p.pid === best.pid);
+    if (proc) {
+      const cpuHistory = Array.isArray(proc.history_cpu) ? proc.history_cpu : [];
+      const memHistory = Array.isArray(proc.history_mem) ? proc.history_mem : [];
+      const cpuPct = cpuHistory.length ? cpuHistory[cpuHistory.length - 1].toFixed(1) : '0.0';
+      const memPct = memHistory.length ? memHistory[memHistory.length - 1].toFixed(1) : '0.0';
+      
+      tip.innerHTML = `<strong>PID ${proc.pid}</strong><br>` +
+                      `State: ${proc.state}<br>` +
+                      `CPU: ${cpuPct}%<br>` +
+                      `MEM: ${memPct} MB<br>` +
+                      `Priority: ${proc.priority}`;
+      tip.style.display = 'block';
+      tip.style.left = `${Math.min(nexusCanvas.offsetWidth - 180, Math.max(6, best.x + 12))}px`;
+      tip.style.top = `${Math.max(6, best.y - 10)}px`;
+    }
+  } else {
+    tip.style.display = 'none';
+  }
+}
+
+function onNexusCanvasLeave() {
+  const tip = document.getElementById('zoneBHoverTip');
+  if (tip) tip.style.display = 'none';
+}
+
+function setZoneDPanel(panel) {
+  activeZoneDPanel = panel;
+  const zone = document.getElementById('zoneD');
+  const inner = zone ? zone.querySelector('.zone-d-inner') : null;
+  const showOnly = {
+    gantt: ['zoneDGantt'],
+    insights: ['zoneDInsights'],
+    log: ['zoneDLog'],
+    legacy: ['zoneDLegacy'],
+  };
+
+  ['zoneDGantt', 'zoneDInsights', 'zoneDLog', 'zoneDLegacy'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.toggle('panel-hidden', !showOnly[panel].includes(id));
+    el.classList.toggle('panel-focus', showOnly[panel].includes(id));
+  });
+
+  if (zone) zone.classList.toggle('focused-subpanel', panel !== 'gantt');
+  if (inner) inner.classList.toggle('focused-subpanel', panel !== 'gantt');
+
+  document.querySelectorAll('#zoneDSwitch .sbtn').forEach(btn => {
+    btn.classList.toggle('sel', btn.dataset.panel === panel);
+  });
+}
+
+function setZoneCPanel(panel) {
+  activeZoneCPanel = panel;
+  const zone = document.getElementById('zoneC');
+  const allCards = ['zoneCMetrics', 'zoneCAlgo', 'zoneCML', 'zoneCBattle', 'zoneCDNA', 'zoneCManual'];
+  const showOnly = {
+    all: allCards,
+    metrics: ['zoneCMetrics'],
+    algorithm: ['zoneCAlgo'],
+    ml: ['zoneCML'],
+    battle: ['zoneCBattle'],
+    dna: ['zoneCDNA'],
+    manual: ['zoneCManual'],
+  };
+
+  allCards.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.toggle('panel-hidden', !showOnly[panel].includes(id));
+    el.classList.toggle('panel-focus', showOnly[panel].includes(id));
+  });
+
+  if (zone) zone.classList.toggle('focused-subpanel', panel !== 'all');
+
+  document.querySelectorAll('#zoneCSwitch .sbtn').forEach(btn => {
+    btn.classList.toggle('sel', btn.dataset.panel === panel);
+  });
+}
+
+function setMainZonePanel(panel) {
+  activeMainZonePanel = panel;
+  const grid = document.querySelector('.main-grid');
+  const zones = ['zoneA', 'zoneB', 'zoneC', 'zoneD'];
+  const showOnly = {
+    all: zones,
+    zoneA: ['zoneA'],
+    zoneB: ['zoneB'],
+    zoneC: ['zoneC'],
+    zoneD: ['zoneD'],
+  };
+
+  zones.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.toggle('zone-hidden', !showOnly[panel].includes(id));
+    el.classList.toggle('zone-focus', showOnly[panel].includes(id) && panel !== 'all');
+  });
+
+  if (grid) {
+    grid.classList.toggle('focused', panel !== 'all');
+  }
+
+  document.querySelectorAll('#mainZoneSwitch .sbtn').forEach(btn => {
+    btn.classList.toggle('sel', btn.dataset.panel === panel);
+  });
+}
+
+// ── Pills ──
+function updatePills(d) {
+  document.getElementById('tickPill').textContent   = `TICK ${d.tick}`;
+  document.getElementById('schedPill').textContent  = d.scheduler_name;
+  document.getElementById('schedPill').style.color  = d.scheduler_color;
+  const bottle = d.bottleneck;
+  const bp = document.getElementById('bottlePill');
+  bp.textContent = bottle === 'none' ? '● STABLE' : `⚠ ${bottle.toUpperCase()}`;
+  bp.style.color = bottle === 'none' ? 'var(--green)' : 'var(--red)';
+
+  const coll = d.collision || { active: false, count: 0, level: 'ok', type: 'none' };
+  const cp = document.getElementById('collPill');
+  cp.textContent = coll.active
+    ? `⚠ COLLISION ${coll.type.toUpperCase()} (${coll.count})`
+    : 'COLLISION 0';
+  if (coll.level === 'critical') {
+    cp.style.color = 'var(--red)';
+  } else if (coll.level === 'warn') {
+    cp.style.color = 'var(--gold)';
+  } else {
+    cp.style.color = 'var(--green)';
+  }
+  applyCollisionClass(cp, coll);
+
+  document.getElementById('cpuPill').textContent  = `CPU ${d.system.used_cpu.toFixed(1)}%`;
+  document.getElementById('memPill').textContent  = `MEM ${d.system.mem_pct.toFixed(1)}%`;
+  document.getElementById('uptimePill').textContent = fmtUptime(d.system.uptime_s || 0);
+
+  applySeverityClass(document.getElementById('cpuPill'), d.system.used_cpu);
+  applySeverityClass(document.getElementById('memPill'), d.system.mem_pct);
+}
+
+// ── Metric minis ──
+function updateMetricMinis(d) {
+  const cpuPressurePct = Math.max(0, Math.min(100, d.cpu_ewma * 100));
+  const memPressurePct = Math.max(0, Math.min(100, d.mem_ewma * 100));
+  const cpuFulfillPct = d.total_req_cpu > 0 ? Math.max(0, Math.min(100, (d.total_alloc_cpu / d.total_req_cpu) * 100)) : 0;
+  const memFulfillPct = d.total_req_mem > 0 ? Math.max(0, Math.min(100, (d.total_alloc_mem / d.total_req_mem) * 100)) : 0;
+
+  document.getElementById('mmCpuP').textContent  = cpuPressurePct.toFixed(1) + '%';
+  document.getElementById('mmMemP').textContent  = memPressurePct.toFixed(1) + '%';
+  document.getElementById('mmAcpu').textContent  = d.total_alloc_cpu.toFixed(1) + ' %';
+  document.getElementById('mmAmem').textContent  = d.total_alloc_mem.toFixed(0) + ' MB';
+
+  document.getElementById('mmAcpuSub').textContent = `${cpuFulfillPct.toFixed(1)}% of requested CPU`;
+  document.getElementById('mmAmemSub').textContent = `${memFulfillPct.toFixed(1)}% of requested memory`;
+
+  document.getElementById('mmCpuPBar').style.width = cpuPressurePct.toFixed(1) + '%';
+  document.getElementById('mmMemPBar').style.width = memPressurePct.toFixed(1) + '%';
+  document.getElementById('mmAcpuBar').style.width = cpuFulfillPct.toFixed(1) + '%';
+  document.getElementById('mmAmemBar').style.width = memFulfillPct.toFixed(1) + '%';
+
+  const setSeverity = (el, pct) => {
+    el.classList.remove('sev-ok', 'sev-warn', 'sev-crit');
+    if (pct >= 85) {
+      el.classList.add('sev-crit');
+      return;
+    }
+    if (pct >= 70) {
+      el.classList.add('sev-warn');
+      return;
+    }
+    el.classList.add('sev-ok');
+  };
+
+  setSeverity(document.getElementById('mmCpuCard'), cpuPressurePct);
+  setSeverity(document.getElementById('mmMemCard'), memPressurePct);
+}
+
+// ── Algo card ──
+function updateAlgoCard(d) {
+  document.getElementById('algoName').textContent    = d.scheduler_name.toUpperCase();
+  document.getElementById('algoName').style.color    = d.scheduler_color;
+  document.getElementById('algoFormula').textContent = d.formula;
+  document.getElementById('algoExplain').textContent = d.explain;
+  document.getElementById('zoneCAlgo').style.borderColor =
+    d.scheduler_color + '55';
+}
+
+// ── ML Pred ──
+function updateMLPred(d) {
+  if (!d.ml_pred || !d.ml_pred.pred_cpu) {
+    document.getElementById('mlTrend').textContent = 'Collecting data…';
+    return;
+  }
+  document.getElementById('mlPredCpu').textContent =
+    `Est. CPU avail: ${d.ml_pred.pred_cpu}% (${d.ml_pred.cpu_trend})`;
+  document.getElementById('mlPredMem').textContent =
+    `Est. Mem avail: ${d.ml_pred.pred_mem.toFixed(0)} MB (${d.ml_pred.mem_trend})`;
+  document.getElementById('mlTrend').textContent =
+    `Linear regression on ${d.cpu_history.length} ticks`;
+}
+
+// ── Battle ──
+function updateBattle(d) {
+  if (!d.battle || !Object.keys(d.battle).length) return;
+  const rows = Object.values(d.battle).sort((a,b) => b.score - a.score);
+  const max  = rows[0]?.score || 1;
+  document.getElementById('battleRows').innerHTML = rows.map((r, i) => `
+    <div class="battle-row">
+      <span class="battle-name" style="color:${r.color}">${r.name.split(' ')[0]}</span>
+      <div class="battle-bar-bg">
+        <div class="battle-bar-fill" style="width:${(r.score/max*100).toFixed(1)}%;background:${r.color}"></div>
+      </div>
+      <span class="battle-score">${r.score.toFixed(0)}${i===0?' <span class="battle-crown">★</span>':''}</span>
+    </div>
+  `).join('');
+}
+
+// ── DNA List ──
+function updateDNAList(procs) {
+  document.getElementById('dnaList').innerHTML = procs.map(p => `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
+      <span style="font-size:9px;width:50px;color:${p.color};flex-shrink:0">PID ${p.pid}</span>
+      <div class="dna-strip">${p.dna.map((v,i) =>
+        `<div class="dna-bar" style="height:${Math.round(v*14+3)}px;background:${p.color};opacity:${0.4+v*0.6}"></div>`
+      ).join('')}</div>
+    </div>
+  `).join('');
+}
+
+// ── Log ──
+function renderLog(narration) {
+  if (!narration) return;
+  document.getElementById('logArea').innerHTML = narration.map(n =>
+    `<div class="log-line ${n.kind}"><span class="ts">[${n.ts}]</span> ${esc(n.msg)}</div>`
+  ).join('');
+}
+
+function updateLegacySummary(d) {
+  const box = document.getElementById('legacySummary');
+  if (!box) return;
+  const legacy = d.legacy || { available: false, rows: 0, db_file: 'allocation_logs.db' };
+  box.innerHTML = `
+    <div style="margin-bottom:6px;"><b>Legacy DB File:</b> ${esc(legacy.db_file)}</div>
+    <div style="margin-bottom:6px;"><b>Legacy Data Found:</b> ${legacy.available ? 'Yes' : 'No'}</div>
+    <div style="margin-bottom:6px;"><b>Legacy Rows:</b> ${legacy.rows}</div>
+    <div style="margin-bottom:6px;"><b>Current NEXUS Tick:</b> ${d.tick}</div>
+    <div style="margin-bottom:6px;"><b>Unified Prediction Source:</b> Legacy + Current</div>
+    <div style="font-size:11px;color:var(--text2);margin-top:8px;">
+      This panel confirms old simulator telemetry is integrated with the new engine for trend prediction.
+    </div>
+  `;
+}
+
+function initManualControls() {
+  renderManualEntries();
+}
+
+function updateManualPanel(d) {
+  const manual = d.manual_control || {};
+  manualModeEnabled = !!manual.enabled;
+  manualOverrides = manual.overrides || {};
+
+  const modeBtn = document.getElementById('manualModeBtn');
+  const modeStatus = document.getElementById('manualModeStatus');
+  if (modeBtn) {
+    modeBtn.textContent = manualModeEnabled ? 'Disable Manual Mode' : 'Enable Manual Mode';
+    modeBtn.classList.toggle('active', manualModeEnabled);
+  }
+  if (modeStatus) {
+    modeStatus.textContent = manualModeEnabled
+      ? 'Mode: Manual (using entered requests)'
+      : 'Mode: Auto (random requests)';
+  }
+  renderManualEntries();
+  renderManualDemograph(d);
+}
+
+function addManualEntry() {
+  const pid = Number(document.getElementById('manualPid').value);
+  const reqCpu = Number(document.getElementById('manualCpu').value);
+  const reqMem = Number(document.getElementById('manualMem').value);
+  if (!Number.isFinite(pid) || pid <= 0) return;
+  manualOverrides[String(Math.floor(pid))] = {
+    req_cpu: Number.isFinite(reqCpu) && reqCpu >= 0 ? reqCpu : 0,
+    req_mem: Number.isFinite(reqMem) && reqMem >= 0 ? reqMem : 0,
+  };
+  pushManualOverrides();
+}
+
+function removeManualEntry() {
+  const pid = Number(document.getElementById('manualPid').value);
+  if (!Number.isFinite(pid) || pid <= 0) return;
+  delete manualOverrides[String(Math.floor(pid))];
+  pushManualOverrides();
+}
+
+function clearManualEntries() {
+  manualOverrides = {};
+  pushManualOverrides();
+}
+
+function toggleManualMode() {
+  manualModeEnabled = !manualModeEnabled;
+  socket.emit('set_manual_mode', { enabled: manualModeEnabled });
+}
+
+function pushManualOverrides() {
+  socket.emit('set_manual_requests', { overrides: manualOverrides });
+  renderManualEntries();
+}
+
+function renderManualEntries() {
+  const list = document.getElementById('manualEntryList');
+  if (!list) return;
+  const rows = Object.entries(manualOverrides)
+    .sort((a, b) => Number(a[0]) - Number(b[0]))
+    .map(([pid, values]) => {
+      const cpu = Number(values.req_cpu || 0).toFixed(1);
+      const mem = Number(values.req_mem || 0).toFixed(1);
+      return `<div class="manual-item">PID ${pid} → CPU ${cpu}% | MEM ${mem} MB</div>`;
+    });
+  list.innerHTML = rows.length ? rows.join('') : 'No manual entries yet.';
+}
+
+function renderManualDemograph(d) {
+  const box = document.getElementById('manualDemograph');
+  if (!box) return;
+  const procs = (d && d.processes) ? d.processes : [];
+  if (!procs.length) {
+    box.innerHTML = `<div class="manual-demograph-title">Real-Time Demograph (CPU and Memory)</div><div class="manual-status">Waiting for runtime data...</div>`;
+    return;
+  }
+
+  const maxReqCpu = Math.max(1, ...procs.map(p => Number(p.requested_cpu || 0)));
+  const maxReqMem = Math.max(1, ...procs.map(p => Number(p.requested_mem || 0)));
+  const rows = procs
+    .sort((a, b) => Number(a.pid) - Number(b.pid))
+    .map(p => {
+      const reqCpu = Number(p.requested_cpu || 0);
+      const allocCpu = Number(p.allocated_cpu || 0);
+      const reqMem = Number(p.requested_mem || 0);
+      const allocMem = Number(p.allocated_mem || 0);
+      const reqCpuPct = Math.max(0, Math.min(100, (reqCpu / maxReqCpu) * 100));
+      const allocCpuPct = Math.max(0, Math.min(100, (allocCpu / maxReqCpu) * 100));
+      const reqMemPct = Math.max(0, Math.min(100, (reqMem / maxReqMem) * 100));
+      const allocMemPct = Math.max(0, Math.min(100, (allocMem / maxReqMem) * 100));
+      return `
+        <div class="manual-demo-row">
+          <div class="manual-demo-head">
+            <span>PID ${p.pid} CPU</span>
+            <span>Req ${reqCpu.toFixed(1)}% | Alloc ${allocCpu.toFixed(1)}%</span>
+          </div>
+          <div class="manual-demo-track">
+            <div class="manual-demo-req" style="width:${reqCpuPct.toFixed(1)}%"></div>
+            <div class="manual-demo-alloc" style="width:${allocCpuPct.toFixed(1)}%"></div>
+          </div>
+          <div class="manual-demo-head" style="margin-top:4px;">
+            <span>PID ${p.pid} MEM</span>
+            <span>Req ${reqMem.toFixed(1)} MB | Alloc ${allocMem.toFixed(1)} MB</span>
+          </div>
+          <div class="manual-demo-track mem">
+            <div class="manual-demo-req" style="width:${reqMemPct.toFixed(1)}%"></div>
+            <div class="manual-demo-alloc" style="width:${allocMemPct.toFixed(1)}%"></div>
+          </div>
+        </div>
+      `;
+    })
+    .join('');
+
+  box.innerHTML = `
+    <div class="manual-demograph-title">Real-Time Demograph (CPU and Memory)</div>
+    ${rows}
+  `;
+}
+
+// ── Marquee ──
+function updateMarquee(d) {
+  const collisionStatus = d.collision && d.collision.active
+    ? `COLLISION ${d.collision.type.toUpperCase()} (${d.collision.count})`
+    : 'NO COLLISION';
+  const items = [
+    `TICK ${d.tick}`,
+    `${d.scheduler_name.toUpperCase()}`,
+    `CPU ${d.system.used_cpu.toFixed(1)}%`,
+    `MEM ${d.system.mem_pct.toFixed(1)}%`,
+    `ALLOC CPU ${d.total_alloc_cpu.toFixed(1)}%`,
+    `ALLOC MEM ${d.total_alloc_mem.toFixed(0)}MB`,
+    `PRESSURE CPU:${(d.cpu_ewma*100).toFixed(0)}% MEM:${(d.mem_ewma*100).toFixed(0)}%`,
+    d.bottleneck === 'none' ? 'SYSTEM STABLE' : `⚠ BOTTLENECK: ${d.bottleneck.toUpperCase()}`,
+    collisionStatus,
+    d.explain.slice(0, 60),
+  ];
+  const doubled = [...items, ...items];
+  document.getElementById('marqueeInner').innerHTML =
+    doubled.map((t,i) => i%2===0
+      ? `<span>${esc(t)}</span>`
+      : `<span class="marquee-item">◈</span>`
+    ).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ZONE A — SVG PROCESS TREE (force-layout sim)
+// ═══════════════════════════════════════════════════════════════════
+let treeNodes = [];
+
+function updateProcTree(procs) {
+  const svg   = document.getElementById('procTreeSvg');
+  const W     = svg.clientWidth  || 240;
+  const H     = svg.clientHeight || 300;
+
+  // Init nodes with stable positions
+  if (treeNodes.length !== procs.length) {
+    treeNodes = procs.map((p, i) => ({
+      pid: p.pid, x: W/2 + Math.cos(i/procs.length*Math.PI*2)*80,
+      y: H/2 + Math.sin(i/procs.length*Math.PI*2)*80,
+      vx: 0, vy: 0,
+    }));
+  }
+
+  // Simple force simulation step
+  for (let iter = 0; iter < 3; iter++) {
+    treeNodes.forEach((n, i) => {
+      // Repel from each other
+      treeNodes.forEach((m, j) => {
+        if (i === j) return;
+        const dx = n.x - m.x, dy = n.y - m.y;
+        const d2 = dx*dx + dy*dy + 1;
+        const f  = 800 / d2;
+        n.vx += f * dx / Math.sqrt(d2);
+        n.vy += f * dy / Math.sqrt(d2);
+      });
+      // Attract to center
+      n.vx += (W/2 - n.x) * 0.01;
+      n.vy += (H/2 - n.y) * 0.01;
+    });
+    treeNodes.forEach(n => {
+      n.vx *= 0.8; n.vy *= 0.8;
+      n.x  = Math.max(20, Math.min(W-20, n.x + n.vx));
+      n.y  = Math.max(20, Math.min(H-20, n.y + n.vy));
+    });
+  }
+
+  // Draw
+  let html = `<defs>
+    ${procs.map(p => `
+      <radialGradient id="ng${p.pid}" cx="40%" cy="35%">
+        <stop offset="0%" stop-color="${p.color}" stop-opacity="0.8"/>
+        <stop offset="100%" stop-color="${p.color}" stop-opacity="0.1"/>
+      </radialGradient>
+    `).join('')}
+  </defs>`;
+
+  // Edges (connect adjacent nodes)
+  for (let i = 0; i < treeNodes.length - 1; i++) {
+    const a = treeNodes[i], b = treeNodes[i+1];
+    const proc = procs[i];
+    html += `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"
+      stroke="${proc.color}" stroke-width="0.5" stroke-opacity="0.25"
+      stroke-dasharray="4 4"/>`;
+
+    // Particle on edge
+    const t = (Date.now() % 2000) / 2000;
+    const px = a.x + (b.x - a.x) * t, py = a.y + (b.y - a.y) * t;
+    html += `<circle cx="${px}" cy="${py}" r="2" fill="${proc.color}" opacity="0.8"/>`;
+  }
+
+  // Nodes
+  procs.forEach((p, i) => {
+    const node = treeNodes[i];
+    if (!node) return;
+    const r     = Math.max(12, Math.min(28, 8 + p.allocated_mem / 40));
+    const pulse = p.state === 'running' ? 1 + Math.sin(Date.now()/300 + i) * 0.12 : 1;
+    const stateColor = {running:'#00ff88',waiting:'#ffd60a',blocked:'#ff003c',ready:'#4e9eff'}[p.state] || '#888';
+    html += `
+      <g style="cursor:pointer" onclick="showPopup(${p.pid})">
+        <circle cx="${node.x}" cy="${node.y}" r="${r*pulse+4}" fill="${p.color}" opacity="0.06"/>
+        <circle cx="${node.x}" cy="${node.y}" r="${r*pulse}" fill="url(#ng${p.pid})"
+          stroke="${p.color}" stroke-width="1" opacity="${p.state==='blocked'?0.4:0.9}"/>
+        <circle cx="${node.x}" cy="${node.y}" r="3" fill="${stateColor}" opacity="0.9"/>
+        <text x="${node.x}" y="${node.y + r*pulse + 11}" text-anchor="middle"
+          fill="${p.color}" font-size="8" font-family="JetBrains Mono">P${p.pid}</text>
+      </g>`;
+  });
+
+  svg.innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ZONE B — CENTRAL ORBITAL CANVAS
+// ═══════════════════════════════════════════════════════════════════
+function initNexusCanvas() {
+  nexusCanvas = document.getElementById('nexusCanvas');
+  nexusCtx    = nexusCanvas.getContext('2d');
+  nexusCanvas.addEventListener('click', onNexusCanvasClick);
+  nexusCanvas.addEventListener('mousemove', onNexusCanvasHover);
+  nexusCanvas.addEventListener('mouseleave', onNexusCanvasLeave);
+}
+
+function drawNexusOrb(state) {
+  if (nexusFrozen && state) {
+    const selected = state.processes.find(p => p.pid === nexusFocusPid) || state.processes[0];
+    if (selected) updateNexusFocusCard(selected);
+    return;
+  }
+
+  const W = nexusCanvas.width  = nexusCanvas.offsetWidth;
+  const H = nexusCanvas.height = nexusCanvas.offsetHeight;
+  const cx = W/2, cy = H/2;
+  const ctx = nexusCtx;
+  ctx.clearRect(0,0,W,H);
+
+  const cpuLoad = state ? state.system.used_cpu / 100 : 0;
+  const bottle  = state ? state.bottleneck : 'none';
+  orbPulse      = Math.sin(Date.now()/600) * 0.08;
+  nexusProcessPoints = [];
+
+  // subtle orbital grid
+  ctx.save();
+  ctx.strokeStyle = 'rgba(0,255,224,0.035)';
+  ctx.lineWidth = 1;
+  for (let i = 40; i < W; i += 40) {
+    ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, H); ctx.stroke();
+  }
+  for (let i = 40; i < H; i += 40) {
+    ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(W, i); ctx.stroke();
+  }
+  ctx.restore();
+
+  // Background rings (scheduler orbits)
+  const scheds = state ? Object.values(state.scheduler_meta) : [];
+  scheds.forEach((s, i) => {
+    const r   = 60 + i * 22;
+    const active = state && s.name === state.scheduler_name;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI*2);
+    ctx.strokeStyle = s.color + (active ? 'aa' : '22');
+    ctx.lineWidth   = active ? 2 : 0.5;
+    if (!active) ctx.setLineDash([4,8]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    if (active) {
+      // Spinning marker on active ring
+      const angle = orbAngle * (1 + i * 0.3);
+      const mx = cx + Math.cos(angle) * r;
+      const my = cy + Math.sin(angle) * r;
+      ctx.beginPath();
+      ctx.arc(mx, my, 4, 0, Math.PI*2);
+      ctx.fillStyle = s.color;
+      ctx.fill();
+      ctx.shadowBlur = 12;
+      ctx.shadowColor = s.color;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+  });
+
+  // Orbiting process dots
+  const procs = state ? state.processes : [];
+  procs.forEach((p, i) => {
+    const angle = orbAngle * 0.7 + (i / Math.max(procs.length,1)) * Math.PI * 2;
+    const r     = 130 + Math.sin(i * 1.3) * 20;
+    const x     = cx + Math.cos(angle) * r;
+    const y     = cy + Math.sin(angle) * r;
+    const dotR  = 3 + p.allocated_cpu / 20;
+    nexusProcessPoints.push({ pid: p.pid, x, y, r: dotR });
+
+    // Trail
+    if (nexusShowTrails) {
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(x, y);
+      ctx.strokeStyle = p.color + '18';
+      ctx.lineWidth   = 0.5;
+      ctx.stroke();
+    }
+
+    ctx.beginPath();
+    ctx.arc(x, y, dotR, 0, Math.PI*2);
+    const focus = nexusFocusPid === p.pid;
+    ctx.fillStyle = focus ? '#ffffff' : p.color;
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = focus ? '#ffffff' : p.color;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    if (focus) {
+      ctx.beginPath();
+      ctx.arc(x, y, dotR + 5, 0, Math.PI*2);
+      ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+  });
+
+  // Data packets flying inward
+  const now = Date.now();
+  procs.forEach((p, i) => {
+    const angle = orbAngle * 0.7 + (i / Math.max(procs.length,1)) * Math.PI * 2;
+    const r0    = 130 + Math.sin(i * 1.3) * 20;
+    const t     = ((now + i * 800) % 2000) / 2000;
+    const x0    = cx + Math.cos(angle) * r0;
+    const y0    = cy + Math.sin(angle) * r0;
+    const px    = x0 + (cx - x0) * t;
+    const py    = y0 + (cy - y0) * t;
+    if (p.state === 'running') {
+      ctx.beginPath();
+      ctx.rect(px - 2, py - 2, 4, 4);
+      ctx.fillStyle = p.color + 'cc';
+      ctx.fill();
+    }
+  });
+
+  // Central orb
+  const orbR    = 36 + orbPulse * 10;
+  const orbColor = bottle !== 'none' ? '#ff003c' :
+                   (state?.scheduler_color || '#00ffe0');
+
+  const grad = ctx.createRadialGradient(cx-8, cy-8, 2, cx, cy, orbR);
+  grad.addColorStop(0, orbColor + 'ff');
+  grad.addColorStop(0.5, orbColor + '88');
+  grad.addColorStop(1, orbColor + '00');
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, orbR, 0, Math.PI*2);
+  ctx.fillStyle = grad;
+  ctx.shadowBlur = bottle !== 'none' ? 40 : 20;
+  ctx.shadowColor = orbColor;
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // CPU load arc
+  ctx.beginPath();
+  ctx.arc(cx, cy, orbR + 6, -Math.PI/2, -Math.PI/2 + Math.PI*2*cpuLoad);
+  ctx.strokeStyle = '#ffd60a';
+  ctx.lineWidth   = 3;
+  ctx.stroke();
+
+  // Center text
+  ctx.fillStyle   = '#ffffff';
+  ctx.font        = `bold 12px Orbitron`;
+  ctx.textAlign   = 'center';
+  ctx.textBaseline= 'middle';
+  ctx.fillText(state ? `${state.system.used_cpu.toFixed(0)}%` : '—', cx, cy - 6);
+  ctx.font = '8px JetBrains Mono';
+  ctx.fillStyle = '#aabbcc';
+  ctx.fillText(state ? state.inner_scheduler?.toUpperCase() || '' : '', cx, cy + 8);
+  ctx.font = '7px JetBrains Mono';
+  ctx.fillStyle = '#6f8cab';
+  ctx.fillText(state ? `RUN ${procs.filter(p => p.state === 'running').length} · WAIT ${procs.filter(p => p.state === 'waiting').length}` : '', cx, cy + 20);
+
+  // Bottleneck shockwave ripple on canvas
+  if (bottle !== 'none') {
+    const ripple = ((now % 1200) / 1200);
+    const rr     = orbR + ripple * 80;
+    ctx.beginPath();
+    ctx.arc(cx, cy, rr, 0, Math.PI*2);
+    ctx.strokeStyle = `rgba(255,0,60,${0.4 - ripple * 0.4})`;
+    ctx.lineWidth   = 2;
+    ctx.stroke();
+  }
+
+  if (state) {
+    const selected = state.processes.find(p => p.pid === nexusFocusPid) || state.processes[0];
+    if (selected) updateNexusFocusCard(selected);
+  }
+
+  orbAngle += 0.012 * nexusSpeed;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ZONE D — GANTT
+// ═══════════════════════════════════════════════════════════════════
+function initGantt() {
+  ganttCanvas = document.getElementById('ganttCanvas');
+  ganttCtx    = ganttCanvas.getContext('2d');
+  ganttCanvas.addEventListener('mousemove', onGanttHover);
+  ganttCanvas.addEventListener('mouseleave', onGanttLeave);
+}
+
+function updateGantt(ganttData, procs) {
+  if (!ganttData || !ganttData.length) return;
+  const W = ganttCanvas.width  = ganttCanvas.offsetWidth;
+  const H = ganttCanvas.height = ganttCanvas.offsetHeight;
+  const ctx = ganttCtx;
+  ctx.clearRect(0,0,W,H);
+
+  const pidList = procs.map(p => p.pid);
+  const leftPad = 38;
+  const topPad = 18;
+  const bottomPad = 14;
+  const chartW = Math.max(1, W - leftPad - 2);
+  const chartH = Math.max(1, H - topPad - bottomPad);
+  const rowH    = chartH / Math.max(pidList.length, 1);
+  const colW    = chartW / Math.max(ganttData.length, 1);
+
+  ganttMeta = { leftPad, topPad, chartW, chartH, rowH, colW, pidList, ganttData };
+
+  // Axis baseline
+  ctx.strokeStyle = 'rgba(130,170,210,0.35)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(leftPad, topPad);
+  ctx.lineTo(leftPad, topPad + chartH);
+  ctx.lineTo(leftPad + chartW, topPad + chartH);
+  ctx.stroke();
+
+  // Background rows
+  pidList.forEach((pid, i) => {
+    ctx.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,0.01)' : 'transparent';
+    ctx.fillRect(leftPad, topPad + i * rowH, chartW, rowH);
+    // PID label
+    const proc = procs.find(p => p.pid === pid);
+    ctx.fillStyle = proc?.color || '#888';
+    ctx.font      = '10px JetBrains Mono';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`P${pid}`, 4, topPad + i * rowH + rowH/2);
+
+    // Row separator
+    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(leftPad, topPad + i * rowH);
+    ctx.lineTo(leftPad + chartW, topPad + i * rowH);
+    ctx.stroke();
+  });
+
+  const stateBase = {
+    running: '#00ff88',
+    ready: '#4e9eff',
+    waiting: '#ffd60a',
+    blocked: '#ff003c'
+  };
+
+  // Gantt blocks
+  ganttData.forEach((entry, col) => {
+    const x = leftPad + col * colW;
+
+    // Tick labels every 5 columns and at the last column
+    if (col % 5 === 0 || col === ganttData.length - 1) {
+      ctx.fillStyle = '#7fa0c2';
+      ctx.font = '9px JetBrains Mono';
+      ctx.textBaseline = 'top';
+      ctx.fillText(`${entry.tick}`, x, topPad + chartH + 2);
+    }
+
+    entry.slots?.forEach(slot => {
+      const row = pidList.indexOf(slot.pid);
+      if (row < 0) return;
+      const intensity = Math.min(1, Math.max(0, slot.cpu / 50));
+      const bh = rowH * 0.7;
+      const by = topPad + row * rowH + (rowH - bh) / 2;
+      const bw = Math.max(1, colW - 1);
+
+      const base = stateBase[slot.state] || slot.color || '#88aacc';
+      const alpha = 0.25 + intensity * 0.75;
+      ctx.fillStyle = `${base}${Math.round(alpha * 255).toString(16).padStart(2,'0')}`;
+      ctx.fillRect(x, by, bw, bh);
+
+      // Thin border for readability
+      ctx.strokeStyle = 'rgba(255,255,255,0.09)';
+      ctx.lineWidth = 0.6;
+      ctx.strokeRect(x + 0.5, by + 0.5, Math.max(0, bw - 1), Math.max(0, bh - 1));
+    });
+  });
+
+  // Current tick line
+  const lx = leftPad + (ganttData.length - 1) * colW;
+  ctx.strokeStyle = 'rgba(0,255,224,0.5)';
+  ctx.lineWidth   = 1;
+  ctx.beginPath();
+  ctx.moveTo(lx, topPad); ctx.lineTo(lx, topPad + chartH);
+  ctx.stroke();
+
+  ctx.fillStyle = 'rgba(0,255,224,0.9)';
+  ctx.font = '9px JetBrains Mono';
+  ctx.textBaseline = 'bottom';
+  ctx.fillText('Now', Math.max(leftPad, lx - 12), topPad - 2);
+}
+
+function onGanttHover(evt) {
+  if (!ganttMeta || !lastState) return;
+  const tip = document.getElementById('ganttTip');
+  const rect = ganttCanvas.getBoundingClientRect();
+  const x = evt.clientX - rect.left;
+  const y = evt.clientY - rect.top;
+
+  const { leftPad, topPad, chartW, chartH, rowH, colW, pidList, ganttData } = ganttMeta;
+  if (x < leftPad || x > leftPad + chartW || y < topPad || y > topPad + chartH) {
+    tip.style.display = 'none';
+    return;
+  }
+
+  const col = Math.floor((x - leftPad) / colW);
+  const row = Math.floor((y - topPad) / rowH);
+  const pid = pidList[row];
+  const entry = ganttData[col];
+  const slot = entry?.slots?.find(s => s.pid === pid);
+  if (!slot || !entry) {
+    tip.style.display = 'none';
+    return;
+  }
+
+  tip.innerHTML = `Tick ${entry.tick}<br>PID ${pid}<br>State: ${slot.state}<br>CPU: ${(slot.cpu || 0).toFixed(1)}%`;
+  tip.style.display = 'block';
+  tip.style.left = `${Math.min(ganttCanvas.offsetWidth - 140, Math.max(6, x + 10))}px`;
+  tip.style.top = `${Math.max(6, y - 8)}px`;
+}
+
+function onGanttLeave() {
+  const tip = document.getElementById('ganttTip');
+  if (tip) tip.style.display = 'none';
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// INSIGHT CHARTS (LINE + PIE)
+// ═══════════════════════════════════════════════════════════════════
+function initInsightCharts() {
+  pressureTrendChart = new Chart(document.getElementById('pressureTrendCanvas'), {
+    type: 'line',
+    data: {
+      labels: Array(60).fill(''),
+      datasets: [
+        {
+          label: 'CPU %',
+          data: Array(60).fill(null),
+          borderColor: '#4e9eff',
+          backgroundColor: '#4e9eff22',
+          fill: true,
+          tension: 0.35,
+          pointRadius: 0,
+          borderWidth: 1.8
+        },
+        {
+          label: 'MEM %',
+          data: Array(60).fill(null),
+          borderColor: '#00ff88',
+          backgroundColor: '#00ff881a',
+          fill: false,
+          tension: 0.35,
+          pointRadius: 0,
+          borderWidth: 1.8
+        }
+      ]
+    },
+    options: {
+      responsive: false,
+      animation: false,
+      plugins: {
+        legend: { labels: { color: '#9fb4d0', boxWidth: 10, font: { size: 10 } } }
+      },
+      scales:{
+        x:{display:false, grid:{display:false}},
+        y:{min:0,max:100, ticks:{color:'#6a8aaa', font:{size:9}}, grid:{color:'rgba(255,255,255,0.06)'}}
+      }
+    }
+  });
+
+  allocPieChart = new Chart(document.getElementById('allocPieCanvas'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Fulfilled', 'Unfulfilled'],
+      datasets: [{ data: [1, 0], backgroundColor: ['#00ff88', '#ff7f50'], borderWidth: 0 }]
+    },
+    options: {
+      responsive: false,
+      animation: false,
+      cutout: '58%',
+      plugins: {
+        legend: { position: 'bottom', labels: { color: '#9fb4d0', font: { size: 9 }, boxWidth: 10 } },
+        tooltip: { enabled: true }
+      }
+    }
+  });
+
+  statePieChart = new Chart(document.getElementById('statePieCanvas'), {
+    type: 'pie',
+    data: {
+      labels: ['Running', 'Ready', 'Waiting', 'Blocked'],
+      datasets: [{ data: [1, 0, 0, 0], backgroundColor: ['#00ff88', '#4e9eff', '#ffd60a', '#ff003c'], borderWidth: 0 }]
+    },
+    options: {
+      responsive: false,
+      animation: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { color: '#9fb4d0', font: { size: 9 }, boxWidth: 10 } },
+        tooltip: { enabled: true }
+      }
+    }
+  });
+}
+
+function updateInsightCharts(d) {
+  const cpuH = d.cpu_history || [];
+  const memH = d.mem_history || [];
+  const pad = arr => { const a=Array(60).fill(null); const s=arr.slice(-60); a.splice(60-s.length,s.length,...s); return a; };
+  pressureTrendChart.data.datasets[0].data = pad(cpuH);
+  pressureTrendChart.data.datasets[1].data = pad(memH);
+  pressureTrendChart.update('none');
+
+  const fulfilled = Math.max(0, Math.min(d.total_req_cpu || 0, d.total_alloc_cpu || 0));
+  const unfulfilled = Math.max(0, (d.total_req_cpu || 0) - fulfilled);
+  allocPieChart.data.datasets[0].data = [fulfilled || 0.001, unfulfilled || 0.001];
+  allocPieChart.update('none');
+
+  const counts = { running: 0, ready: 0, waiting: 0, blocked: 0 };
+  (d.processes || []).forEach(p => {
+    if (counts[p.state] !== undefined) counts[p.state] += 1;
+  });
+  statePieChart.data.datasets[0].data = [
+    counts.running || 0.001,
+    counts.ready || 0.001,
+    counts.waiting || 0.001,
+    counts.blocked || 0.001
+  ];
+  statePieChart.update('none');
+
+  const pressureMax = Math.max(d.cpu_ewma * 100, d.mem_ewma * 100);
+  applySeverityClass(document.getElementById('zoneDTrendCard'), pressureMax);
+  applySeverityClass(document.getElementById('zoneDPieCard'), pressureMax);
+}
+
+function applySeverityClass(el, pct) {
+  if (!el) return;
+  el.classList.remove('alert-ok', 'alert-warn', 'alert-crit');
+  if (pct >= 85) {
+    el.classList.add('alert-crit');
+    return;
+  }
+  if (pct >= 70) {
+    el.classList.add('alert-warn');
+    return;
+  }
+  el.classList.add('alert-ok');
+}
+
+function applyCollisionClass(el, coll) {
+  if (!el) return;
+  el.classList.remove('alert-ok', 'alert-warn', 'alert-crit');
+  if (coll && coll.level === 'critical') {
+    el.classList.add('alert-crit');
+    return;
+  }
+  if (coll && coll.level === 'warn') {
+    el.classList.add('alert-warn');
+    return;
+  }
+  el.classList.add('alert-ok');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// STATE MACHINE SVG
+// ═══════════════════════════════════════════════════════════════════
+const SM_STATES = [
+  {id:'ready',   x:10,  y:25, label:'Ready',   color:'#4e9eff'},
+  {id:'running', x:90,  y:25, label:'Running',  color:'#00ff88'},
+  {id:'waiting', x:170, y:25, label:'Wait',     color:'#ffd60a'},
+  {id:'blocked', x:130, y:45, label:'Block',    color:'#ff003c'},
+];
+const SM_EDGES = [
+  ['ready','running'],['running','waiting'],['waiting','running'],
+  ['running','blocked'],['blocked','ready'],
+];
+
+function initStateMachine() {
+  const svg = document.getElementById('stateMachSvg');
+  let html  = '<defs><marker id="arr" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L6,3 z" fill="rgba(0,255,224,0.4)"/></marker></defs>';
+  SM_EDGES.forEach(([a,b]) => {
+    const n1 = SM_STATES.find(s=>s.id===a);
+    const n2 = SM_STATES.find(s=>s.id===b);
+    html += `<line x1="${n1.x+18}" y1="${n1.y}" x2="${n2.x}" y2="${n2.y}"
+      stroke="rgba(0,255,224,0.2)" stroke-width="0.8" marker-end="url(#arr)"/>`;
+  });
+  SM_STATES.forEach(s => {
+    html += `<rect id="sm-${s.id}" x="${s.x-5}" y="${s.y-7}" width="36" height="14"
+      rx="3" fill="${s.color}22" stroke="${s.color}66" stroke-width="0.8"/>
+    <text x="${s.x+13}" y="${s.y+3}" text-anchor="middle" fill="${s.color}"
+      font-size="6" font-family="JetBrains Mono">${s.label}</text>`;
+  });
+  svg.innerHTML = html;
+}
+
+function updateStateMachine(procs) {
+  const counts = {ready:0, running:0, waiting:0, blocked:0};
+  procs.forEach(p => { if (counts[p.state] !== undefined) counts[p.state]++; });
+  SM_STATES.forEach(s => {
+    const el = document.getElementById(`sm-${s.id}`);
+    if (!el) return;
+    const active = counts[s.id] > 0;
+    el.setAttribute('fill', active ? s.color+'66' : s.color+'11');
+    el.setAttribute('stroke', active ? s.color : s.color+'44');
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ANIMATION LOOP (60fps)
+// ═══════════════════════════════════════════════════════════════════
+function animLoop() {
+  drawNexusOrb(lastState);
+  if (lastState) updateProcTree(lastState.processes);
+  requestAnimationFrame(animLoop);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SHOCKWAVE
+// ═══════════════════════════════════════════════════════════════════
+function fireShockwave() {
+  const el = document.getElementById('shockwave');
+  el.classList.remove('firing');
+  void el.offsetWidth;  // reflow
+  el.classList.add('firing');
+  setTimeout(() => el.classList.remove('firing'), 900);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// GHOST REPLAY
+// ═══════════════════════════════════════════════════════════════════
+function requestGhost() {
+  socket.emit('ghost_replay');
+}
+
+function playGhost() {
+  const overlay = document.getElementById('ghostOverlay');
+  overlay.classList.add('active');
+  ghostPlaying = true;
+  stepGhost();
+}
+
+function stepGhost() {
+  if (!ghostPlaying || ghostIdx >= ghostData.length) {
+    stopGhost(); return;
+  }
+  const d = ghostData[ghostIdx++];
+  render(d);
+  document.getElementById('ghostFill').style.width =
+    (ghostIdx / ghostData.length * 100) + '%';
+  document.getElementById('ghostLbl').textContent =
+    `Tick ${d.tick}  (${ghostIdx} / ${ghostData.length})`;
+  setTimeout(stepGhost, 80);  // 10x speed (original=500ms → 50ms → display 80ms)
+}
+
+function stopGhost() {
+  ghostPlaying = false;
+  document.getElementById('ghostOverlay').classList.remove('active');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PROCESS POPUP
+// ═══════════════════════════════════════════════════════════════════
+function showPopup(pid) {
+  if (!lastState) return;
+  const p = lastState.processes.find(x => x.pid === pid);
+  if (!p) return;
+  const popup = document.getElementById('procPopup');
+  document.getElementById('procPopupContent').innerHTML = `
+    <div style="font-family:var(--font-display);font-size:11px;color:${p.color};margin-bottom:8px;">
+      PID ${p.pid} — ${p.workload_type}
+    </div>
+    ${row('State', p.state)}
+    ${row('Priority', p.priority)}
+    ${row('Alloc CPU', p.allocated_cpu.toFixed(1) + '%')}
+    ${row('Alloc Mem', p.allocated_mem.toFixed(0) + ' MB')}
+    ${row('Wait Time', p.wait_time + ' ticks')}
+    ${row('Starvation Credit', p.starvation_credit.toFixed(2))}
+    ${row('Burst Left', p.burst_left)}
+    <div class="dna-strip" style="margin-top:8px;">${p.dna.map(v =>
+      `<div class="dna-bar" style="height:${Math.round(v*14+3)}px;background:${p.color};opacity:${0.4+v*0.6}"></div>`
+    ).join('')}</div>
+  `;
+  popup.style.display = 'block';
+  popup.style.left    = '50%';
+  popup.style.top     = '50%';
+  popup.style.transform = 'translate(-50%,-50%)';
+}
+
+function row(k, v) {
+  return `<div class="popup-row"><span class="popup-key">${k}</span><span class="popup-val">${v}</span></div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CONTROLS
+// ═══════════════════════════════════════════════════════════════════
+function setScheduler(key) {
+  socket.emit('set_scheduler', { key });
+  document.querySelectorAll('.abtn').forEach(b => {
+    b.classList.toggle('sel', b.dataset.key === key);
+  });
+}
+
+// ── helpers ──
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function fmtUptime(s) {
+  const h = Math.floor(s/3600), m = Math.floor((s%3600)/60);
+  return `UP ${h}h ${m}m`;
+}
+</script>
+</body>
+</html>

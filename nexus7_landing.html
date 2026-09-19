@@ -1,0 +1,1413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>NEXUS-7 — Sentient Resource Orchestration Engine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=JetBrains+Mono:wght@300;400;600&family=Syne:wght@300;400;700;800&display=swap" rel="stylesheet">
+<style>
+/* ══════════════════════════════════════════════
+   TOKENS
+══════════════════════════════════════════════ */
+:root {
+  --bg:        #010508;
+  --bg2:       #030c14;
+  --bg3:       #071525;
+  --neon:      #00ffe0;
+  --neon-dim:  rgba(0,255,224,0.08);
+  --neon2:     #7b2fff;
+  --red:       #ff003c;
+  --gold:      #ffd60a;
+  --green:     #00ff88;
+  --text:      #c8d8f0;
+  --text2:     #5a7a9a;
+  --text3:     #1e3050;
+  --border:    rgba(0,255,224,0.1);
+  --border2:   rgba(0,255,224,0.22);
+  --glow:      0 0 40px rgba(0,255,224,0.18);
+  --f-display: 'Orbitron', sans-serif;
+  --f-body:    'Syne', sans-serif;
+  --f-mono:    'JetBrains Mono', monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--f-body);
+  background: var(--bg);
+  color: var(--text);
+  overflow-x: hidden;
+  cursor: none;
+}
+
+/* Custom cursor */
+#cursor {
+  position: fixed; pointer-events: none; z-index: 9999;
+  width: 12px; height: 12px;
+  border: 1px solid var(--neon);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: transform 0.08s ease, width 0.2s, height 0.2s, border-color 0.2s;
+  mix-blend-mode: screen;
+}
+#cursor-trail {
+  position: fixed; pointer-events: none; z-index: 9998;
+  width: 4px; height: 4px;
+  background: var(--neon);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: left 0.15s ease, top 0.15s ease;
+  opacity: 0.5;
+}
+body:has(a:hover) #cursor { width: 28px; height: 28px; border-color: var(--gold); }
+
+/* ══ Circuit BG ══ */
+body::before {
+  content: '';
+  position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background-image:
+    linear-gradient(rgba(0,255,224,0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,255,224,0.018) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+/* Scanlines */
+body::after {
+  content: '';
+  position: fixed; inset: 0; pointer-events: none; z-index: 1000;
+  background: repeating-linear-gradient(
+    0deg, transparent, transparent 3px,
+    rgba(0,0,0,0.035) 3px, rgba(0,0,0,0.035) 4px
+  );
+}
+
+/* ══ Noise texture overlay ══ */
+.noise {
+  position: fixed; inset: 0; pointer-events: none; z-index: 1001; opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+}
+
+/* ══════════════════════════════════════════════
+   CANVAS (particle field)
+══════════════════════════════════════════════ */
+#bgCanvas {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+}
+
+/* ══════════════════════════════════════════════
+   NAV
+══════════════════════════════════════════════ */
+nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 40px;
+  background: rgba(1,5,8,0.8);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+}
+
+.nav-brand {
+  font-family: var(--f-display);
+  font-size: 14px; font-weight: 900;
+  letter-spacing: 0.18em; color: var(--neon);
+  text-shadow: 0 0 20px rgba(0,255,224,0.5);
+  display: flex; align-items: center; gap: 10px;
+}
+
+.nav-orb {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--neon);
+  box-shadow: 0 0 10px var(--neon);
+  animation: orb-blink 2s ease-in-out infinite;
+}
+@keyframes orb-blink {
+  0%,100% { opacity: 1; box-shadow: 0 0 10px var(--neon); }
+  50%      { opacity: 0.5; box-shadow: 0 0 4px var(--neon); }
+}
+
+.nav-links {
+  display: flex; align-items: center; gap: 28px;
+  font-size: 11px; font-family: var(--f-mono);
+  letter-spacing: 0.12em;
+}
+
+.nav-links a {
+  color: var(--text2); text-decoration: none;
+  transition: color 0.2s;
+}
+.nav-links a:hover { color: var(--neon); }
+
+.nav-cta {
+  padding: 8px 20px;
+  border: 1px solid var(--neon);
+  border-radius: 6px;
+  color: var(--neon) !important;
+  font-family: var(--f-mono);
+  font-size: 10px; letter-spacing: 0.15em;
+  transition: background 0.2s, box-shadow 0.2s !important;
+}
+.nav-cta:hover {
+  background: rgba(0,255,224,0.08) !important;
+  box-shadow: 0 0 20px rgba(0,255,224,0.2) !important;
+}
+
+/* ══════════════════════════════════════════════
+   HERO
+══════════════════════════════════════════════ */
+.hero {
+  position: relative; z-index: 10;
+  min-height: 100vh;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  text-align: center;
+  padding: 120px 40px 80px;
+}
+
+.hero-eyebrow {
+  font-family: var(--f-mono);
+  font-size: 10px; letter-spacing: 0.3em;
+  color: var(--neon); margin-bottom: 24px;
+  opacity: 0; animation: fadeUp 0.8s 0.2s ease forwards;
+  display: flex; align-items: center; gap: 12px;
+}
+.hero-eyebrow::before, .hero-eyebrow::after {
+  content: ''; flex: 1; max-width: 60px; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--neon));
+}
+.hero-eyebrow::after { background: linear-gradient(90deg, var(--neon), transparent); }
+
+.hero-title {
+  font-family: var(--f-display);
+  font-size: clamp(48px, 9vw, 110px);
+  font-weight: 900;
+  line-height: 0.92;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  margin-bottom: 8px;
+  opacity: 0; animation: fadeUp 0.9s 0.35s ease forwards;
+}
+
+.hero-title span {
+  display: block;
+  background: linear-gradient(135deg, var(--neon) 0%, #00a8ff 50%, var(--neon2) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 0 30px rgba(0,255,224,0.35));
+}
+
+.hero-sub {
+  font-family: var(--f-display);
+  font-size: clamp(12px, 2vw, 16px);
+  letter-spacing: 0.3em;
+  color: var(--text2);
+  margin-bottom: 32px;
+  opacity: 0; animation: fadeUp 0.9s 0.5s ease forwards;
+}
+
+.hero-desc {
+  max-width: 580px;
+  font-size: 15px; line-height: 1.8;
+  color: var(--text2); margin-bottom: 48px;
+  opacity: 0; animation: fadeUp 0.9s 0.65s ease forwards;
+}
+
+.hero-btns {
+  display: flex; gap: 14px; flex-wrap: wrap; justify-content: center;
+  opacity: 0; animation: fadeUp 0.9s 0.8s ease forwards;
+}
+
+.btn-primary {
+  position: relative;
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 16px 36px;
+  font-family: var(--f-display);
+  font-size: 11px; font-weight: 700; letter-spacing: 0.2em;
+  color: var(--bg);
+  background: var(--neon);
+  border: none; border-radius: 8px;
+  cursor: none; text-decoration: none;
+  overflow: hidden;
+  transition: transform 0.2s, box-shadow 0.2s;
+  box-shadow: 0 0 30px rgba(0,255,224,0.35), 0 0 60px rgba(0,255,224,0.12);
+}
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 50px rgba(0,255,224,0.55), 0 0 100px rgba(0,255,224,0.2);
+}
+.btn-primary::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.25) 50%, transparent 100%);
+  transform: translateX(-100%);
+  transition: transform 0.6s ease;
+}
+.btn-primary:hover::before { transform: translateX(100%); }
+
+.btn-secondary {
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 16px 36px;
+  font-family: var(--f-display);
+  font-size: 11px; font-weight: 700; letter-spacing: 0.2em;
+  color: var(--neon);
+  background: transparent;
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  cursor: none; text-decoration: none;
+  transition: background 0.2s, border-color 0.2s, transform 0.2s;
+}
+.btn-secondary:hover {
+  background: rgba(0,255,224,0.05);
+  border-color: var(--neon);
+  transform: translateY(-2px);
+}
+
+/* Arrow icon */
+.arrow-icon {
+  width: 16px; height: 16px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0; font-size: 10px;
+  transition: transform 0.2s;
+}
+.btn-primary:hover .arrow-icon,
+.btn-secondary:hover .arrow-icon { transform: rotate(45deg); }
+
+/* Status strip */
+.hero-status {
+  display: flex; gap: 28px; margin-top: 60px;
+  flex-wrap: wrap; justify-content: center;
+  opacity: 0; animation: fadeUp 0.9s 1s ease forwards;
+}
+.status-item {
+  font-family: var(--f-mono); font-size: 10px;
+  color: var(--text3); letter-spacing: 0.1em;
+  display: flex; align-items: center; gap: 6px;
+}
+.status-dot { width: 5px; height: 5px; border-radius: 50%; }
+
+/* Scroll hint */
+.scroll-hint {
+  position: absolute; bottom: 32px; left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--f-mono); font-size: 9px;
+  color: var(--text3); letter-spacing: 0.15em;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  animation: bounce 2s ease-in-out infinite;
+  opacity: 0; animation: fadeIn 1s 1.5s ease forwards, bounce 2s 2.5s ease-in-out infinite;
+}
+.scroll-hint::after {
+  content: '';
+  width: 1px; height: 40px;
+  background: linear-gradient(to bottom, var(--neon), transparent);
+}
+@keyframes bounce {
+  0%,100% { transform: translateX(-50%) translateY(0); }
+  50%      { transform: translateX(-50%) translateY(6px); }
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ══════════════════════════════════════════════
+   SECTION WRAPPER
+══════════════════════════════════════════════ */
+section { position: relative; z-index: 10; }
+
+.section-inner {
+  max-width: 1200px; margin: 0 auto;
+  padding: 100px 40px;
+}
+
+.section-label {
+  font-family: var(--f-mono);
+  font-size: 9px; letter-spacing: 0.3em; text-transform: uppercase;
+  color: var(--neon); margin-bottom: 16px;
+  display: flex; align-items: center; gap: 12px;
+}
+.section-label::before {
+  content: ''; width: 24px; height: 1px;
+  background: var(--neon); flex-shrink: 0;
+}
+
+.section-title {
+  font-family: var(--f-display);
+  font-size: clamp(28px, 4vw, 48px);
+  font-weight: 900; letter-spacing: -0.02em;
+  line-height: 1.05; margin-bottom: 20px;
+  color: var(--text);
+}
+
+.section-desc {
+  font-size: 15px; line-height: 1.8;
+  color: var(--text2); max-width: 560px;
+}
+
+/* ══════════════════════════════════════════════
+   HOW IT WORKS — 3-step flow
+══════════════════════════════════════════════ */
+#how { background: linear-gradient(180deg, var(--bg) 0%, var(--bg2) 100%); }
+
+.how-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+  margin-top: 60px;
+}
+@media(max-width:800px){ .how-grid { grid-template-columns: 1fr; } }
+
+.how-card {
+  background: var(--bg2);
+  padding: 40px 32px;
+  position: relative; overflow: hidden;
+  transition: background 0.3s;
+}
+.how-card:hover { background: rgba(0,255,224,0.025); }
+
+.how-card::before {
+  content: attr(data-num);
+  position: absolute; top: -10px; right: 16px;
+  font-family: var(--f-display); font-size: 80px; font-weight: 900;
+  color: rgba(0,255,224,0.04);
+  line-height: 1; pointer-events: none;
+}
+
+.how-icon {
+  width: 44px; height: 44px; border-radius: 10px;
+  border: 1px solid var(--border2);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; margin-bottom: 20px;
+  background: rgba(0,255,224,0.06);
+}
+
+.how-title {
+  font-family: var(--f-display);
+  font-size: 13px; font-weight: 700;
+  letter-spacing: 0.08em; color: var(--neon);
+  margin-bottom: 12px;
+}
+
+.how-body {
+  font-size: 13px; line-height: 1.8; color: var(--text2);
+}
+
+.how-tag {
+  display: inline-block; margin-top: 16px;
+  padding: 3px 10px; border-radius: 20px;
+  font-family: var(--f-mono); font-size: 9px; letter-spacing: 0.1em;
+  background: rgba(0,255,224,0.06); color: var(--neon);
+  border: 1px solid var(--border);
+}
+
+/* ══════════════════════════════════════════════
+   ALGORITHMS
+══════════════════════════════════════════════ */
+#algorithms { background: var(--bg2); }
+
+.algo-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin-top: 60px;
+}
+@media(max-width:700px){ .algo-grid { grid-template-columns: 1fr; } }
+
+.algo-card {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 28px 28px 24px;
+  position: relative; overflow: hidden;
+  transition: border-color 0.3s, transform 0.3s;
+  cursor: default;
+}
+.algo-card:hover {
+  border-color: var(--card-color, var(--neon));
+  transform: translateY(-3px);
+}
+.algo-card::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: var(--card-color, var(--neon));
+  transform: scaleX(0); transform-origin: left;
+  transition: transform 0.4s ease;
+}
+.algo-card:hover::before { transform: scaleX(1); }
+
+/* Glow on hover */
+.algo-card::after {
+  content: '';
+  position: absolute; inset: 0; border-radius: 14px;
+  background: radial-gradient(ellipse at 50% 0%, var(--card-color, var(--neon)) 0%, transparent 70%);
+  opacity: 0; transition: opacity 0.4s;
+  pointer-events: none;
+}
+.algo-card:hover::after { opacity: 0.04; }
+
+.algo-header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  margin-bottom: 16px; gap: 12px;
+}
+
+.algo-name {
+  font-family: var(--f-display);
+  font-size: 14px; font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--card-color, var(--neon));
+}
+
+.algo-tag {
+  font-family: var(--f-mono); font-size: 9px;
+  padding: 3px 10px; border-radius: 20px;
+  border: 1px solid currentColor;
+  color: var(--card-color, var(--neon));
+  opacity: 0.6; flex-shrink: 0;
+}
+
+.algo-desc {
+  font-size: 13px; line-height: 1.8; color: var(--text2);
+  margin-bottom: 18px;
+}
+
+.algo-formula {
+  background: rgba(0,0,0,0.4);
+  border: 1px solid var(--border);
+  border-radius: 8px; padding: 12px 14px;
+  font-family: var(--f-mono); font-size: 10px;
+  color: var(--text); line-height: 1.9;
+  margin-bottom: 16px;
+  letter-spacing: 0.02em;
+}
+.algo-formula .hl { color: var(--card-color, var(--neon)); }
+
+.algo-pros {
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+.algo-pro {
+  font-family: var(--f-mono); font-size: 9px;
+  padding: 3px 9px; border-radius: 4px;
+  background: rgba(0,255,224,0.05);
+  color: var(--text2); letter-spacing: 0.06em;
+}
+
+/* NEXUS card — full width */
+.algo-card.nexus {
+  grid-column: 1 / -1;
+  background: linear-gradient(135deg, rgba(0,255,224,0.04) 0%, rgba(123,47,255,0.04) 100%);
+  border-color: rgba(0,255,224,0.2);
+}
+.algo-card.nexus::before { background: linear-gradient(90deg, var(--neon), var(--neon2)); }
+
+/* ══════════════════════════════════════════════
+   ARCHITECTURE DIAGRAM
+══════════════════════════════════════════════ */
+#architecture { background: var(--bg); }
+
+.arch-diagram {
+  margin-top: 60px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 40px;
+  position: relative; overflow: hidden;
+}
+
+.arch-diagram::before {
+  content: '';
+  position: absolute; inset: 0;
+  background-image: radial-gradient(rgba(0,255,224,0.05) 1px, transparent 1px);
+  background-size: 24px 24px;
+  pointer-events: none;
+}
+
+.arch-row {
+  display: flex; align-items: center;
+  justify-content: center; gap: 0;
+  margin-bottom: 0; position: relative; z-index: 1;
+}
+
+.arch-box {
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  padding: 14px 20px;
+  text-align: center;
+  position: relative;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+.arch-box:hover {
+  border-color: var(--box-color, var(--neon));
+  box-shadow: 0 0 20px rgba(0,255,224,0.1);
+}
+
+.arch-box-label {
+  font-family: var(--f-mono);
+  font-size: 9px; letter-spacing: 0.1em;
+  color: var(--text3); text-transform: uppercase; margin-bottom: 4px;
+}
+.arch-box-name {
+  font-family: var(--f-display);
+  font-size: 11px; font-weight: 700;
+  color: var(--box-color, var(--neon));
+}
+
+.arch-arrow {
+  display: flex; flex-direction: column;
+  align-items: center; padding: 0 8px; flex-shrink: 0;
+}
+.arch-arrow-line {
+  width: 40px; height: 1px;
+  background: var(--border2);
+  position: relative;
+}
+.arch-arrow-line::after {
+  content: '▶'; position: absolute; right: -6px; top: -5px;
+  font-size: 8px; color: var(--neon); opacity: 0.5;
+}
+.arch-arrow-label {
+  font-family: var(--f-mono); font-size: 8px;
+  color: var(--text3); margin-top: 3px; white-space: nowrap;
+}
+
+.arch-down {
+  display: flex; justify-content: center; padding: 12px 0;
+}
+.arch-down-line {
+  width: 1px; height: 32px;
+  background: linear-gradient(to bottom, var(--border2), transparent);
+  position: relative;
+}
+.arch-down-line::after {
+  content: '▼'; position: absolute; bottom: -8px; left: -4px;
+  font-size: 8px; color: var(--neon); opacity: 0.5;
+}
+
+.arch-row-multi {
+  display: flex; gap: 12px; justify-content: center;
+  position: relative; z-index: 1;
+}
+
+/* ══════════════════════════════════════════════
+   FEATURES GRID
+══════════════════════════════════════════════ */
+#features { background: var(--bg2); }
+
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-top: 60px;
+}
+@media(max-width:900px){ .features-grid { grid-template-columns: repeat(2,1fr); } }
+@media(max-width:550px){ .features-grid { grid-template-columns: 1fr; } }
+
+.feat-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px 22px;
+  background: var(--bg3);
+  transition: border-color 0.25s, transform 0.25s;
+  position: relative; overflow: hidden;
+}
+.feat-card:hover { border-color: var(--border2); transform: translateY(-2px); }
+
+.feat-icon {
+  font-size: 22px; margin-bottom: 14px; display: block;
+}
+
+.feat-title {
+  font-family: var(--f-display);
+  font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+  color: var(--text); margin-bottom: 8px;
+}
+
+.feat-body {
+  font-size: 12px; line-height: 1.75; color: var(--text2);
+}
+
+.feat-badge {
+  position: absolute; top: 14px; right: 14px;
+  font-family: var(--f-mono); font-size: 8px;
+  padding: 2px 8px; border-radius: 20px;
+  background: rgba(0,255,224,0.06);
+  color: var(--neon); border: 1px solid var(--border);
+}
+
+/* ══════════════════════════════════════════════
+   CTA SECTION
+══════════════════════════════════════════════ */
+#cta {
+  background: var(--bg);
+  text-align: center;
+}
+
+.cta-inner {
+  max-width: 700px; margin: 0 auto;
+  padding: 120px 40px;
+}
+
+.cta-glow {
+  position: absolute; left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  width: 600px; height: 600px;
+  background: radial-gradient(ellipse at center,
+    rgba(0,255,224,0.06) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.cta-title {
+  font-family: var(--f-display);
+  font-size: clamp(32px, 5vw, 58px);
+  font-weight: 900; letter-spacing: -0.02em;
+  line-height: 1.05; margin-bottom: 20px;
+  color: var(--text);
+}
+
+.cta-title em {
+  font-style: normal;
+  background: linear-gradient(90deg, var(--neon), var(--neon2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.cta-sub {
+  font-size: 14px; line-height: 1.8;
+  color: var(--text2); margin-bottom: 44px;
+}
+
+.cta-steps {
+  display: flex; gap: 24px; justify-content: center;
+  flex-wrap: wrap; margin-bottom: 48px;
+}
+
+.cta-step {
+  font-family: var(--f-mono); font-size: 10px;
+  color: var(--text2);
+  display: flex; align-items: center; gap: 8px;
+}
+
+.step-num {
+  width: 20px; height: 20px; border-radius: 50%;
+  border: 1px solid var(--border2);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 8px; color: var(--neon); flex-shrink: 0;
+}
+
+.code-block {
+  background: rgba(0,0,0,0.6);
+  border: 1px solid var(--border);
+  border-radius: 10px; padding: 20px 24px;
+  font-family: var(--f-mono); font-size: 12px;
+  color: var(--text); text-align: left;
+  line-height: 2; margin-bottom: 40px;
+  position: relative;
+}
+.code-block .comment { color: var(--text3); }
+.code-block .cmd     { color: var(--neon); }
+.code-block .arg     { color: var(--gold); }
+
+.code-copy {
+  position: absolute; top: 10px; right: 12px;
+  font-family: var(--f-mono); font-size: 9px;
+  color: var(--text3); cursor: none;
+  padding: 3px 8px; border-radius: 4px;
+  border: 1px solid var(--border);
+  background: transparent; transition: color 0.2s, border-color 0.2s;
+}
+.code-copy:hover { color: var(--neon); border-color: var(--border2); }
+
+/* ══════════════════════════════════════════════
+   FOOTER
+══════════════════════════════════════════════ */
+footer {
+  position: relative; z-index: 10;
+  border-top: 1px solid var(--border);
+  padding: 28px 40px;
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 12px;
+  background: rgba(1,5,8,0.9);
+}
+
+.footer-brand {
+  font-family: var(--f-display);
+  font-size: 12px; font-weight: 900;
+  letter-spacing: 0.15em; color: var(--neon);
+}
+
+.footer-copy {
+  font-family: var(--f-mono);
+  font-size: 10px; color: var(--text3);
+}
+
+/* ══════════════════════════════════════════════
+   SCROLL REVEAL
+══════════════════════════════════════════════ */
+.reveal {
+  opacity: 0; transform: translateY(30px);
+  transition: opacity 0.7s ease, transform 0.7s ease;
+}
+.reveal.visible { opacity: 1; transform: none; }
+.reveal-delay-1 { transition-delay: 0.1s; }
+.reveal-delay-2 { transition-delay: 0.2s; }
+.reveal-delay-3 { transition-delay: 0.3s; }
+
+/* Divider line */
+.divider {
+  width: 100%; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border2) 30%, var(--border2) 70%, transparent);
+}
+
+</style>
+</head>
+<body>
+
+<div class="noise"></div>
+<div id="cursor"></div>
+<div id="cursor-trail"></div>
+<canvas id="bgCanvas"></canvas>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-brand">
+    <div class="nav-orb"></div>
+    NEXUS-7
+  </div>
+  <div class="nav-links">
+    <a href="#how">How It Works</a>
+    <a href="#algorithms">Algorithms</a>
+    <a href="#architecture">Architecture</a>
+    <a href="#features">Features</a>
+    <a href="/dashboard" class="nav-cta">LAUNCH ENGINE →</a>
+  </div>
+</nav>
+
+<!-- ══ HERO ══ -->
+<section class="hero">
+  <div class="hero-eyebrow">ADAPTIVE RESOURCE ORCHESTRATION ENGINE</div>
+  <h1 class="hero-title">
+    NEXUS<span>SEVEN</span>
+  </h1>
+  <div class="hero-sub">MULTIPROGRAMMING SYSTEMS · REAL-TIME · SENTIENT</div>
+  <p class="hero-desc">
+    A living, breathing OS scheduler that reads your real system — CPU cores,
+    running processes, actual RAM — and dynamically reallocates resources
+    every 500ms using six adaptive algorithms to prevent bottlenecks before
+    they happen.
+  </p>
+  <div class="hero-btns">
+    <a href="/dashboard" class="btn-primary">
+      LAUNCH NEXUS-7
+      <span class="arrow-icon">↗</span>
+    </a>
+    <a href="#how" class="btn-secondary">
+      HOW IT WORKS
+      <span class="arrow-icon">↓</span>
+    </a>
+  </div>
+  <div class="hero-status">
+    <span class="status-item"><span class="status-dot" style="background:var(--green)"></span>REAL PSUTIL DATA</span>
+    <span class="status-item"><span class="status-dot" style="background:var(--neon)"></span>WEBSOCKET PUSH 500MS</span>
+    <span class="status-item"><span class="status-dot" style="background:var(--neon2)"></span>6 SCHEDULING ALGORITHMS</span>
+    <span class="status-item"><span class="status-dot" style="background:var(--gold)"></span>ML PREDICTION</span>
+    <span class="status-item"><span class="status-dot" style="background:var(--red)"></span>SQLITE TELEMETRY</span>
+  </div>
+  <div class="scroll-hint">SCROLL</div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ══ HOW IT WORKS ══ -->
+<section id="how">
+  <div class="section-inner">
+    <div class="section-label reveal">How It Works</div>
+    <h2 class="section-title reveal reveal-delay-1">
+      From kernel data<br>to real-time decision
+    </h2>
+    <p class="section-desc reveal reveal-delay-2">
+      NEXUS-7 bridges your OS kernel and a cyberpunk war-room dashboard through
+      a three-layer pipeline that never stops adapting.
+    </p>
+
+    <div class="how-grid">
+      <div class="how-card reveal" data-num="01">
+        <div class="how-icon">📡</div>
+        <div class="how-title">SENSE</div>
+        <p class="how-body">
+          <code style="color:var(--neon);font-size:11px">psutil</code> polls
+          your OS every 500ms — reading real CPU core utilization, available
+          RAM, swap pressure, running process list, per-process memory footprint,
+          and disk/network I/O. Every number is real, nothing is mocked.
+        </p>
+        <span class="how-tag">psutil · OS kernel</span>
+      </div>
+      <div class="how-card reveal reveal-delay-1" data-num="02">
+        <div class="how-icon">🧠</div>
+        <div class="how-title">DECIDE</div>
+        <p class="how-body">
+          The <strong style="color:var(--neon)">NexusAdaptiveAI</strong>
+          meta-scheduler reads EWMA-smoothed CPU and memory pressure values
+          and picks the optimal classical algorithm for the current load
+          profile. It then computes a per-process CPU and memory allocation
+          using a weighted fair-share 2-pass algorithm with starvation credits.
+        </p>
+        <span class="how-tag">EWMA · weighted fair-share · aging</span>
+      </div>
+      <div class="how-card reveal reveal-delay-2" data-num="03">
+        <div class="how-icon">⚡</div>
+        <div class="how-title">STREAM</div>
+        <p class="how-body">
+          Allocations, scheduler decisions, natural-language narration, battle
+          mode results, ML predictions, and Gantt entries are pushed via
+          <strong style="color:var(--neon)">WebSocket</strong> to the browser
+          dashboard. The UI repaints at 60fps using
+          <code style="color:var(--neon);font-size:11px">requestAnimationFrame</code>
+          — zero polling, near-zero latency.
+        </p>
+        <span class="how-tag">Flask-SocketIO · 60fps Canvas</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ══ ALGORITHMS ══ -->
+<section id="algorithms">
+  <div class="section-inner">
+    <div class="section-label reveal">Scheduling Algorithms</div>
+    <h2 class="section-title reveal reveal-delay-1">Six minds, one engine</h2>
+    <p class="section-desc reveal reveal-delay-2">
+      Each algorithm is a real Python class with its own scheduling logic,
+      formula, explanation string, and metrics. You can switch between them
+      live in the dashboard.
+    </p>
+
+    <div class="algo-grid">
+
+      <!-- Round Robin -->
+      <div class="algo-card reveal" style="--card-color:#4e9eff">
+        <div class="algo-header">
+          <div class="algo-name">Round Robin</div>
+          <span class="algo-tag">THE DEMOCRAT</span>
+        </div>
+        <p class="algo-desc">
+          The fairest scheduler. Every process receives equal CPU time in
+          rotating order. No process can monopolize the CPU — each gets exactly
+          one time quantum before yielding to the next.
+        </p>
+        <div class="algo-formula">
+          <span class="hl">q</span> = time quantum (20ms)<br>
+          avg wait = <span class="hl">(n − 1) × q</span><br>
+          cpu_share = <span class="hl">avail_cpu / n</span>
+        </div>
+        <div class="algo-pros">
+          <span class="algo-pro">No starvation</span>
+          <span class="algo-pro">Fair</span>
+          <span class="algo-pro">Simple</span>
+          <span class="algo-pro">Best for equal workloads</span>
+        </div>
+      </div>
+
+      <!-- Priority -->
+      <div class="algo-card reveal reveal-delay-1" style="--card-color:#ff003c">
+        <div class="algo-header">
+          <div class="algo-name">Priority Scheduling</div>
+          <span class="algo-tag">THE ARISTOCRAT</span>
+        </div>
+        <p class="algo-desc">
+          Resources flow to the highest-priority process first. To prevent
+          starvation, priority aging automatically boosts processes that have
+          waited too long — the longer you wait, the more important you become.
+        </p>
+        <div class="algo-formula">
+          sort by <span class="hl">priority</span> (1 = highest)<br>
+          aging: <span class="hl">priority −= 2</span> if wait &gt; 2 ticks<br>
+          starvation_credit <span class="hl">+= 0.2</span> per missed tick
+        </div>
+        <div class="algo-pros">
+          <span class="algo-pro">Critical tasks first</span>
+          <span class="algo-pro">Priority aging</span>
+          <span class="algo-pro">Starvation guard</span>
+        </div>
+      </div>
+
+      <!-- SJF -->
+      <div class="algo-card reveal" style="--card-color:#00ff88">
+        <div class="algo-header">
+          <div class="algo-name">Shortest Job First</div>
+          <span class="algo-tag">THE OPTIMIZER</span>
+        </div>
+        <p class="algo-desc">
+          Minimizes average waiting time by always serving the process with
+          the smallest remaining burst. Mathematically optimal for throughput
+          when burst times are known. NEXUS activates this during CPU spikes.
+        </p>
+        <div class="algo-formula">
+          select <span class="hl">min(burst_left)</span><br>
+          avg_wait = <span class="hl">Σ(start − arrival) / n</span><br>
+          weight = <span class="hl">(n − rank) / Σ(1..n)</span>
+        </div>
+        <div class="algo-pros">
+          <span class="algo-pro">Minimum avg wait</span>
+          <span class="algo-pro">Max throughput</span>
+          <span class="algo-pro">Optimal under load</span>
+        </div>
+      </div>
+
+      <!-- MLQ -->
+      <div class="algo-card reveal reveal-delay-1" style="--card-color:#c77dff">
+        <div class="algo-header">
+          <div class="algo-name">Multilevel Queue</div>
+          <span class="algo-tag">THE BUREAUCRAT</span>
+        </div>
+        <p class="algo-desc">
+          Processes are permanently assigned to queues by workload type.
+          CPU-Intensive processes get the foreground queue (70% of resources),
+          while Memory-Intensive and Balanced processes share the background
+          queue (30%). No migration between queues.
+        </p>
+        <div class="algo-formula">
+          foreground: <span class="hl">CPU-Intensive → 70% pool</span><br>
+          background: <span class="hl">others → 30% pool</span><br>
+          within queue: equal share = <span class="hl">pool / |group|</span>
+        </div>
+        <div class="algo-pros">
+          <span class="algo-pro">Workload-aware</span>
+          <span class="algo-pro">Predictable</span>
+          <span class="algo-pro">Low overhead</span>
+        </div>
+      </div>
+
+      <!-- MLFQ -->
+      <div class="algo-card reveal" style="--card-color:#ffd60a">
+        <div class="algo-header">
+          <div class="algo-name">Multilevel Feedback Queue</div>
+          <span class="algo-tag">THE LEARNER</span>
+        </div>
+        <p class="algo-desc">
+          Three priority levels. Processes that consume too much CPU get
+          demoted to a lower level with a smaller share. A periodic boost
+          every 50 ticks resets all processes to level 0 — preventing
+          permanent starvation of demoted processes.
+        </p>
+        <div class="algo-formula">
+          L0 = <span class="hl">60%</span> · L1 = <span class="hl">30%</span> · L2 = <span class="hl">10%</span><br>
+          demotion: <span class="hl">wait &gt; 1</span> → level + 1<br>
+          boost every <span class="hl">T = 50 ticks</span>
+        </div>
+        <div class="algo-pros">
+          <span class="algo-pro">Self-adapting</span>
+          <span class="algo-pro">Anti-starvation boost</span>
+          <span class="algo-pro">Behavior-based</span>
+        </div>
+      </div>
+
+      <!-- NEXUS AI -->
+      <div class="algo-card nexus reveal reveal-delay-1" style="--card-color:var(--neon)">
+        <div class="algo-header">
+          <div class="algo-name" style="font-size:16px">NEXUS Adaptive AI</div>
+          <span class="algo-tag" style="border-color:var(--neon);color:var(--neon)">THE BRAIN · DEFAULT</span>
+        </div>
+        <p class="algo-desc">
+          The meta-scheduler. Reads EWMA-smoothed CPU and memory pressure every
+          tick and dynamically selects the optimal classical algorithm. It narrates
+          every decision in real time so you see exactly why it switched.
+        </p>
+        <div class="algo-formula" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+          <div>
+            CPU &gt; 90% → <span class="hl">SJF</span> (clear backlog)<br>
+            MEM &gt; 85% → <span class="hl">Priority</span> (starve low-prio)<br>
+            Many blocked → <span class="hl">MLFQ</span> (re-queue)
+          </div>
+          <div>
+            Mixed load → <span class="hl">MLQ</span> (fg/bg split)<br>
+            Low load → <span class="hl">Round Robin</span> (fairness)<br>
+            EWMA α = <span class="hl">0.35</span> (smoothed pressure)
+          </div>
+        </div>
+        <div class="algo-pros">
+          <span class="algo-pro">Context-aware</span>
+          <span class="algo-pro">Self-switching</span>
+          <span class="algo-pro">Narrated decisions</span>
+          <span class="algo-pro">EWMA smoothing</span>
+          <span class="algo-pro">2-pass reallocation</span>
+          <span class="algo-pro">Starvation credit</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ══ ARCHITECTURE ══ -->
+<section id="architecture">
+  <div class="section-inner">
+    <div class="section-label reveal">System Architecture</div>
+    <h2 class="section-title reveal reveal-delay-1">The data pipeline</h2>
+    <p class="section-desc reveal reveal-delay-2">
+      Real system data flows from your OS kernel through Python, gets enriched
+      by the AI allocator, then streams via WebSocket to the browser at 60fps.
+    </p>
+
+    <div class="arch-diagram reveal reveal-delay-1">
+
+      <!-- Row 1 -->
+      <div class="arch-row">
+        <div class="arch-box" style="--box-color:var(--text2)">
+          <div class="arch-box-label">OS Kernel</div>
+          <div class="arch-box-name">psutil</div>
+        </div>
+        <div class="arch-arrow">
+          <div class="arch-arrow-line"></div>
+          <div class="arch-arrow-label">every 500ms</div>
+        </div>
+        <div class="arch-box" style="--box-color:var(--neon)">
+          <div class="arch-box-label">Python Thread</div>
+          <div class="arch-box-name">Poller</div>
+        </div>
+        <div class="arch-arrow">
+          <div class="arch-arrow-line"></div>
+          <div class="arch-arrow-label">process list</div>
+        </div>
+        <div class="arch-box" style="--box-color:var(--neon)">
+          <div class="arch-box-label">Meta-Scheduler</div>
+          <div class="arch-box-name">NexusAdaptiveAI</div>
+        </div>
+        <div class="arch-arrow">
+          <div class="arch-arrow-line"></div>
+          <div class="arch-arrow-label">allocations</div>
+        </div>
+        <div class="arch-box" style="--box-color:var(--neon2)">
+          <div class="arch-box-label">Persistence</div>
+          <div class="arch-box-name">SQLite DB</div>
+        </div>
+      </div>
+
+      <div class="arch-down"><div class="arch-down-line"></div></div>
+
+      <!-- Row 2 -->
+      <div class="arch-row">
+        <div class="arch-box" style="--box-color:var(--gold);margin:0 auto">
+          <div class="arch-box-label">Push Server</div>
+          <div class="arch-box-name">Flask-SocketIO</div>
+        </div>
+        <div class="arch-arrow">
+          <div class="arch-arrow-line" style="width:80px"></div>
+          <div class="arch-arrow-label">WebSocket</div>
+        </div>
+        <div class="arch-box" style="--box-color:var(--gold)">
+          <div class="arch-box-label">ML Engine</div>
+          <div class="arch-box-name">LinearRegression</div>
+        </div>
+      </div>
+
+      <div class="arch-down"><div class="arch-down-line"></div></div>
+
+      <!-- Row 3 - UI zones -->
+      <div class="arch-row-multi">
+        <div class="arch-box" style="--box-color:var(--neon);font-size:10px">
+          <div class="arch-box-label">Zone A</div>
+          <div class="arch-box-name">SVG Process Tree</div>
+        </div>
+        <div class="arch-box" style="--box-color:var(--neon2);font-size:10px">
+          <div class="arch-box-label">Zone B</div>
+          <div class="arch-box-name">Canvas Orbital</div>
+        </div>
+        <div class="arch-box" style="--box-color:var(--gold);font-size:10px">
+          <div class="arch-box-label">Zone C</div>
+          <div class="arch-box-name">Algo Explainer</div>
+        </div>
+        <div class="arch-box" style="--box-color:var(--green);font-size:10px">
+          <div class="arch-box-label">Zone D</div>
+          <div class="arch-box-name">Gantt + History</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ══ FEATURES ══ -->
+<section id="features">
+  <div class="section-inner">
+    <div class="section-label reveal">Unique Features</div>
+    <h2 class="section-title reveal reveal-delay-1">
+      No OS monitor<br>looks like this
+    </h2>
+
+    <div class="features-grid">
+
+      <div class="feat-card reveal">
+        <span class="feat-icon">🌐</span>
+        <div class="feat-title">REAL SYSTEM DATA</div>
+        <p class="feat-body">Every metric comes from your actual OS via psutil — real CPU cores, real processes, real RAM. Nothing simulated.</p>
+        <span class="feat-badge">psutil</span>
+      </div>
+
+      <div class="feat-card reveal reveal-delay-1">
+        <span class="feat-icon">⚔</span>
+        <div class="feat-title">ALGORITHM BATTLE MODE</div>
+        <p class="feat-body">Every 10 ticks, all 5 schedulers run on the same workload snapshot. Efficiency scores compared in a live horse-race bar.</p>
+        <span class="feat-badge">unique</span>
+      </div>
+
+      <div class="feat-card reveal reveal-delay-2">
+        <span class="feat-icon">◈</span>
+        <div class="feat-title">GHOST REPLAY</div>
+        <p class="feat-body">Records the last 60 ticks of scheduling decisions. Replay them at 10× speed through the full UI to review past behavior.</p>
+        <span class="feat-badge">unique</span>
+      </div>
+
+      <div class="feat-card reveal">
+        <span class="feat-icon">🧬</span>
+        <div class="feat-title">PROCESS DNA</div>
+        <p class="feat-body">Each process gets a 16-bar waveform fingerprint generated deterministically from its PID and workload type — like a barcode.</p>
+        <span class="feat-badge">unique</span>
+      </div>
+
+      <div class="feat-card reveal reveal-delay-1">
+        <span class="feat-icon">🗣</span>
+        <div class="feat-title">NEXUS NARRATES</div>
+        <p class="feat-body">The AI types its reasoning in real time: "Switching to SJF — CPU at 91%, 3 short-burst processes detected." Every decision explained.</p>
+        <span class="feat-badge">unique</span>
+      </div>
+
+      <div class="feat-card reveal reveal-delay-2">
+        <span class="feat-icon">💥</span>
+        <div class="feat-title">BOTTLENECK SHOCKWAVE</div>
+        <p class="feat-body">When CPU exceeds 85%, the entire UI emits a red radial pulse — every panel flashes and the Gantt goes red for the saturated window.</p>
+        <span class="feat-badge">unique</span>
+      </div>
+
+      <div class="feat-card reveal">
+        <span class="feat-icon">📈</span>
+        <div class="feat-title">ML PREDICTION</div>
+        <p class="feat-body">Linear regression on historical CPU/memory data predicts available resources for the next tick, with trend direction (rising/falling/stable).</p>
+        <span class="feat-badge">scikit-learn</span>
+      </div>
+
+      <div class="feat-card reveal reveal-delay-1">
+        <span class="feat-icon">🪐</span>
+        <div class="feat-title">ORBITAL CANVAS</div>
+        <p class="feat-body">A 60fps Canvas animation shows the AI brain orb at center, algorithm rings orbiting it, and process dots firing data packets inward.</p>
+        <span class="feat-badge">Canvas 2D</span>
+      </div>
+
+      <div class="feat-card reveal reveal-delay-2">
+        <span class="feat-icon">🌿</span>
+        <div class="feat-title">FORCE-DIRECTED TREE</div>
+        <p class="feat-body">Processes rendered as SVG nodes with repulsion physics. Node size = memory. Pulse speed = CPU. Click any node for full PCB details.</p>
+        <span class="feat-badge">SVG physics</span>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ══ CTA ══ -->
+<section id="cta" style="position:relative">
+  <div class="cta-glow"></div>
+  <div class="cta-inner">
+    <div class="section-label reveal" style="justify-content:center">Ready</div>
+    <h2 class="cta-title reveal reveal-delay-1">
+      Launch the<br><em>sentient engine</em>
+    </h2>
+    <p class="cta-sub reveal reveal-delay-2">
+      Run two commands. Open your browser. Watch your system come alive.
+    </p>
+
+    <div class="code-block reveal reveal-delay-1">
+      <button class="code-copy" onclick="copyCode()">copy</button>
+      <div><span class="comment"># Install dependencies</span></div>
+      <div><span class="cmd">pip</span> <span class="arg">install</span> psutil flask flask-socketio flask-cors eventlet numpy pandas scikit-learn</div>
+      <div>&nbsp;</div>
+      <div><span class="comment"># Start NEXUS-7</span></div>
+      <div><span class="cmd">python</span> <span class="arg">nexus7.py</span></div>
+    </div>
+
+    <div class="hero-btns reveal reveal-delay-2">
+      <a href="/dashboard" class="btn-primary" style="font-size:13px;padding:18px 44px">
+        OPEN NEXUS-7
+        <span class="arrow-icon">↗</span>
+      </a>
+      <a href="#algorithms" class="btn-secondary">
+        REVIEW ALGORITHMS
+        <span class="arrow-icon">↑</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ══ FOOTER ══ -->
+<footer>
+  <div class="footer-brand">NEXUS-7</div>
+  <div class="footer-copy">
+    Adaptive Resource Allocation · Multiprogramming Systems · psutil + Flask-SocketIO
+  </div>
+</footer>
+
+<script>
+/* ══ Custom cursor ══ */
+const cursor = document.getElementById('cursor');
+const trail  = document.getElementById('cursor-trail');
+document.addEventListener('mousemove', e => {
+  cursor.style.left = e.clientX + 'px';
+  cursor.style.top  = e.clientY + 'px';
+  setTimeout(() => {
+    trail.style.left = e.clientX + 'px';
+    trail.style.top  = e.clientY + 'px';
+  }, 80);
+});
+
+/* ══ Particle canvas ══ */
+const canvas = document.getElementById('bgCanvas');
+const ctx    = canvas.getContext('2d');
+let W, H, particles = [], mouse = { x: 0, y: 0 };
+
+function resize() {
+  W = canvas.width  = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+document.addEventListener('mousemove', e => {
+  mouse.x = e.clientX; mouse.y = e.clientY;
+});
+
+class Particle {
+  constructor() { this.reset(); }
+  reset() {
+    this.x  = Math.random() * W;
+    this.y  = Math.random() * H;
+    this.vx = (Math.random() - 0.5) * 0.3;
+    this.vy = (Math.random() - 0.5) * 0.3;
+    this.r  = Math.random() * 1.2 + 0.3;
+    this.alpha = Math.random() * 0.4 + 0.1;
+    this.color = Math.random() > 0.85 ? '#7b2fff' : '#00ffe0';
+  }
+  update() {
+    // Slight mouse attraction
+    const dx = mouse.x - this.x, dy = mouse.y - this.y;
+    const d2 = dx * dx + dy * dy;
+    if (d2 < 40000) {
+      this.vx += dx / d2 * 0.8;
+      this.vy += dy / d2 * 0.8;
+    }
+    this.vx *= 0.99; this.vy *= 0.99;
+    this.x += this.vx; this.y += this.vy;
+    if (this.x < 0 || this.x > W || this.y < 0 || this.y > H) this.reset();
+  }
+  draw() {
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+    ctx.fillStyle = this.color;
+    ctx.globalAlpha = this.alpha;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+}
+
+// Init particles
+for (let i = 0; i < 120; i++) particles.push(new Particle());
+
+// Connect nearby particles
+function drawConnections() {
+  for (let i = 0; i < particles.length; i++) {
+    for (let j = i + 1; j < particles.length; j++) {
+      const dx = particles[i].x - particles[j].x;
+      const dy = particles[i].y - particles[j].y;
+      const d  = Math.sqrt(dx * dx + dy * dy);
+      if (d < 100) {
+        ctx.beginPath();
+        ctx.moveTo(particles[i].x, particles[i].y);
+        ctx.lineTo(particles[j].x, particles[j].y);
+        ctx.strokeStyle = '#00ffe0';
+        ctx.globalAlpha = (1 - d / 100) * 0.06;
+        ctx.lineWidth   = 0.5;
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+    }
+  }
+}
+
+function animParticles() {
+  ctx.clearRect(0, 0, W, H);
+  particles.forEach(p => { p.update(); p.draw(); });
+  drawConnections();
+  requestAnimationFrame(animParticles);
+}
+animParticles();
+
+/* ══ Scroll reveal ══ */
+const reveals = document.querySelectorAll('.reveal');
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      e.target.classList.add('visible');
+      observer.unobserve(e.target);
+    }
+  });
+}, { threshold: 0.12 });
+reveals.forEach(el => observer.observe(el));
+
+/* ══ Copy code ══ */
+function copyCode() {
+  const code = `pip install psutil flask flask-socketio flask-cors eventlet numpy pandas scikit-learn\npython nexus7.py`;
+  navigator.clipboard.writeText(code).then(() => {
+    const btn = document.querySelector('.code-copy');
+    btn.textContent = 'copied!';
+    btn.style.color = 'var(--green)';
+    setTimeout(() => { btn.textContent = 'copy'; btn.style.color = ''; }, 2000);
+  });
+}
+
+/* ══ Smooth redirect on CTA clicks ══ */
+document.querySelectorAll('a[href="/dashboard"]').forEach(a => {
+  a.addEventListener('click', e => {
+    e.preventDefault();
+    // Flash body
+    document.body.style.transition = 'opacity 0.4s ease';
+    document.body.style.opacity = '0';
+    setTimeout(() => { window.location.href = '/dashboard'; }, 400);
+  });
+});
+
+/* ══ Active nav link highlight on scroll ══ */
+const sections = document.querySelectorAll('section[id]');
+const navLinks = document.querySelectorAll('.nav-links a[href^="#"]');
+window.addEventListener('scroll', () => {
+  let current = '';
+  sections.forEach(s => {
+    if (window.scrollY >= s.offsetTop - 100) current = s.id;
+  });
+  navLinks.forEach(a => {
+    a.style.color = a.getAttribute('href') === '#' + current
+      ? 'var(--neon)' : '';
+  });
+}, { passive: true });
+</script>
+</body>
+</html>
